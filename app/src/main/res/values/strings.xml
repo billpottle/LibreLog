@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">LibreLog</string>
+    <string name="title_home">Home</string>
+    <string name="title_input">Input</string>
+    <string name="title_output">Output</string>
+    <string name="title_help">Help</string>
 </resources>

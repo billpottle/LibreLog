@@ -1,31 +1,65 @@
 package com.example.librelog;
 
 import android.os.Bundle;
-import android.widget.Button;
 import androidx.appcompat.app.AppCompatActivity;
-import java.util.Date;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
+import com.example.librelog.ui.HelpFragment;
+import com.example.librelog.ui.HomeFragment;
+import com.example.librelog.ui.InputFragment;
+import com.example.librelog.ui.OutputFragment;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
-    private AppDatabase db;
+
+    private BottomNavigationView bottomNavigationView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        db = AppDatabase.getDatabase(getApplicationContext());
+        bottomNavigationView = findViewById(R.id.bottom_navigation);
 
-        Button recordButton = findViewById(R.id.button_record_event);
-        recordButton.setOnClickListener(view -> {
-            LogEntry logEntry = new LogEntry();
-            logEntry.event = "default";
-            logEntry.timestamp = new Date().getTime();
-            logEntry.notes = "";
+        bottomNavigationView.setOnItemSelectedListener(item -> {
+            Fragment selectedFragment = null;
+            int itemId = item.getItemId();
 
-            AppDatabase.databaseWriteExecutor.execute(() -> {
-                db.logEntryDao().insert(logEntry);
-                // You can add a Toast or Log message here to confirm insertion
-            });
+            if (itemId == R.id.navigation_home) {
+                selectedFragment = new HomeFragment();
+            } else if (itemId == R.id.navigation_input) {
+                selectedFragment = new InputFragment();
+            } else if (itemId == R.id.navigation_output) {
+                selectedFragment = new OutputFragment();
+            } else if (itemId == R.id.navigation_help) {
+                selectedFragment = new HelpFragment();
+            }
+
+            if (selectedFragment != null) {
+                loadFragment(selectedFragment);
+            }
+            return true;
         });
+
+        // Load the default fragment
+        if (savedInstanceState == null) {
+            // Ensure bottomNavigationView is not null before trying to set selected item
+            if (bottomNavigationView != null) {
+                 bottomNavigationView.setSelectedItemId(R.id.navigation_home);
+            } else {
+                // Fallback in case bottom_navigation is not found, though it should be.
+                loadFragment(new HomeFragment());
+            }
+        }
+    }
+
+    private void loadFragment(Fragment fragment) {
+        if (fragment != null) {
+            FragmentManager fragmentManager = getSupportFragmentManager();
+            FragmentTransaction fragmentTransaction = fragmentManager.beginTransaction();
+            fragmentTransaction.replace(R.id.fragment_container, fragment);
+            fragmentTransaction.commit();
+        }
     }
 }
