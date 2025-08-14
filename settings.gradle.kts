@@ -13,7 +13,11 @@ pluginManagement {
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories { google(); mavenCentral() }
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = java.net.URI("https://jitpack.io") } // Added JitPack here
+    }
 }
 rootProject.name = "LibreLog"
 include(":app")
