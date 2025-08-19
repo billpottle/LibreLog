@@ -4,9 +4,9 @@
         android:icon="@drawable/ic_home" 
         android:title="@string/title_home" />
     <item
-        android:id="@+id/navigation_input"
+        android:id="@+id/navigation_import"
         android:icon="@drawable/ic_input"
-        android:title="@string/title_input" />
+        android:title="@string/title_import" />
     <item
         android:id="@+id/navigation_output"
         android:icon="@drawable/ic_output"

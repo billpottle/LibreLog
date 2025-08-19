@@ -5,9 +5,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
+
+import com.example.librelog.ui.ImportFragment;
 import com.example.librelog.ui.SettingsFragment;
 import com.example.librelog.ui.HomeFragment;
-import com.example.librelog.ui.InputFragment;
 import com.example.librelog.ui.OutputFragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
@@ -28,8 +29,8 @@ public class MainActivity extends AppCompatActivity {
 
             if (itemId == R.id.navigation_home) {
                 selectedFragment = new HomeFragment();
-            } else if (itemId == R.id.navigation_input) {
-                selectedFragment = new InputFragment();
+            } else if (itemId == R.id.navigation_import) {
+                selectedFragment = new ImportFragment();
             } else if (itemId == R.id.navigation_output) {
                 selectedFragment = new OutputFragment();
             } else if (itemId == R.id.navigation_help) {

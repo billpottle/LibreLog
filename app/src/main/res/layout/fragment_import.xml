@@ -31,4 +31,14 @@
         android:layout_height="wrap_content"
         android:text="Select CSV File to Import" />
 
+    <!-- This was the missing TextView -->
+    <TextView
+        android:id="@+id/text_import_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:gravity="center_horizontal"
+        android:text="No file selected."
+        android:textSize="14sp"/>
+
 </LinearLayout>
