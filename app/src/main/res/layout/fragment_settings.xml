@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".ui.SettingsFragment">
+
+    <TextView
+        android:id="@+id/text_settings_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/title_settings"
+        android:textSize="24sp"
+        android:layout_marginTop="70dp"
+        android:layout_marginBottom="24dp"/>
+
+    <Button
+        android:id="@+id/button_delete_all_data"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:text="Delete All Data"
+        android:backgroundTint="@android:color/holo_red_light" />
+
+    <TextView
+        android:id="@+id/text_delete_warning"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="This will permanently delete all recorded events. This action cannot be undone."
+        android:textColor="@android:color/darker_gray"
+        android:textSize="14sp"
+        android:gravity="center_horizontal"/>
+
+</LinearLayout>

@@ -5,7 +5,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
-import com.example.librelog.ui.HelpFragment;
+import com.example.librelog.ui.SettingsFragment;
 import com.example.librelog.ui.HomeFragment;
 import com.example.librelog.ui.InputFragment;
 import com.example.librelog.ui.OutputFragment;
@@ -33,7 +33,7 @@ public class MainActivity extends AppCompatActivity {
             } else if (itemId == R.id.navigation_output) {
                 selectedFragment = new OutputFragment();
             } else if (itemId == R.id.navigation_help) {
-                selectedFragment = new HelpFragment();
+                selectedFragment = new SettingsFragment();
             }
 
             if (selectedFragment != null) {
