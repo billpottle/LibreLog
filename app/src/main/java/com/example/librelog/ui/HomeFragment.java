@@ -1,241 +1,199 @@
 package com.example.librelog.ui;
 
-import android.graphics.Color;
+import android.app.AlertDialog;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.librelog.AppDatabase;
 import com.example.librelog.LogEntry;
+import com.example.librelog.LogEntryAdapter;
 import com.example.librelog.R;
-import com.github.mikephil.charting.charts.BarChart;
-import com.github.mikephil.charting.components.AxisBase;
-import com.github.mikephil.charting.components.Description;
-import com.github.mikephil.charting.components.XAxis;
-import com.github.mikephil.charting.components.YAxis;
-import com.github.mikephil.charting.data.BarData;
-import com.github.mikephil.charting.data.BarDataSet;
-import com.github.mikephil.charting.data.BarEntry;
-import com.github.mikephil.charting.formatter.ValueFormatter;
-import com.github.mikephil.charting.utils.ColorTemplate;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 public class HomeFragment extends Fragment {
 
     private AppDatabase db;
-    private BarChart barChartHourlyEvents;
-    private BarChart barChartMonthlyEvents; // Added for monthly chart
+    private RecyclerView recyclerViewLogEntries;
+    private LogEntryAdapter logEntryAdapter;
+    private TextView textViewNoEntries;
+    private FloatingActionButton fabAddLogEntry;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_home, container, false);
-
-        db = AppDatabase.getDatabase(requireContext().getApplicationContext());
-
-        Button recordButton = view.findViewById(R.id.button_record_event);
-        recordButton.setOnClickListener(v -> {
-            LogEntry logEntry = new LogEntry();
-            logEntry.setEvent("default");
-            logEntry.setTimestamp(new Date().getTime());
-            logEntry.setNotes("");
-
-            AppDatabase.databaseWriteExecutor.execute(() -> {
-                db.logEntryDao().insert(logEntry);
-                // Refresh chart data after inserting new entry
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        setupHourlyEventsChart();
-                        setupMonthlyEventsChart(); // Refresh monthly chart too
-                    });
-                }
-            });
-        });
-
-        barChartHourlyEvents = view.findViewById(R.id.bar_chart_hourly_events);
-        setupHourlyEventsChart();
-
-        barChartMonthlyEvents = view.findViewById(R.id.bar_chart_monthly_events); // Initialize monthly chart
-        setupMonthlyEventsChart(); // Setup monthly chart
-
+        if (getContext() != null) {
+            db = AppDatabase.getDatabase(requireContext().getApplicationContext());
+        }
         return view;
     }
 
-    private void setupHourlyEventsChart() {
-        AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> entries = db.logEntryDao().getAllLogEntries();
-            if (getActivity() == null) return;
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
 
-            getActivity().runOnUiThread(() -> {
-                if (entries == null || entries.isEmpty()) {
-                    barChartHourlyEvents.clear();
-                    barChartHourlyEvents.invalidate();
-                    return;
-                }
+        recyclerViewLogEntries = view.findViewById(R.id.recycler_view_log_entries);
+        textViewNoEntries = view.findViewById(R.id.text_view_no_entries);
+        fabAddLogEntry = view.findViewById(R.id.fab_add_log_entry);
 
-                int[] hourlyCounts = new int[24]; // For 24 hours
-                Calendar calendar = Calendar.getInstance();
+        if (recyclerViewLogEntries != null) {
+            recyclerViewLogEntries.setLayoutManager(new LinearLayoutManager(getContext()));
+            logEntryAdapter = new LogEntryAdapter(new ArrayList<>()); // Make sure LogEntryAdapter is correctly imported/defined
+            recyclerViewLogEntries.setAdapter(logEntryAdapter);
+        }
 
-                for (LogEntry entry : entries) {
-                    calendar.setTimeInMillis(entry.getTimestamp());
-                    int hourOfDay = calendar.get(Calendar.HOUR_OF_DAY);
-                    if (hourOfDay >= 0 && hourOfDay < 24) {
-                        hourlyCounts[hourOfDay]++;
-                    }
-                }
-
-                ArrayList<BarEntry> barEntries = new ArrayList<>();
-                for (int i = 0; i < 24; i++) {
-                    barEntries.add(new BarEntry(i, hourlyCounts[i]));
-                }
-
-                BarDataSet dataSet = new BarDataSet(barEntries, "Events per Hour");
-                dataSet.setColors(ColorTemplate.MATERIAL_COLORS);
-                dataSet.setValueTextColor(Color.BLACK);
-                dataSet.setValueTextSize(10f);
-                dataSet.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        if (value == 0) {
-                            return "";
-                        }
-                        return String.valueOf((int) value);
-                    }
-                });
-
-                BarData barData = new BarData(dataSet);
-                barData.setBarWidth(0.9f);
-
-                barChartHourlyEvents.getDescription().setEnabled(false);
-                barChartHourlyEvents.setDrawGridBackground(false);
-                barChartHourlyEvents.setFitBars(true);
-                barChartHourlyEvents.setData(barData);
-                barChartHourlyEvents.setDrawBorders(false);
-                barChartHourlyEvents.getLegend().setEnabled(false);
-
-                XAxis xAxis = barChartHourlyEvents.getXAxis();
-                xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
-                xAxis.setGranularity(1f);
-                xAxis.setLabelCount(24, false);
-                xAxis.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        return String.valueOf((int) value);
-                    }
-                });
-                xAxis.setDrawGridLines(false);
-
-                YAxis leftAxis = barChartHourlyEvents.getAxisLeft();
-                leftAxis.setAxisMinimum(0f);
-                leftAxis.setGranularity(1f);
-                leftAxis.setGranularityEnabled(true);
-                leftAxis.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        return String.valueOf((int) value);
-                    }
-                });
-                leftAxis.setDrawGridLines(false);
-
-                barChartHourlyEvents.getAxisRight().setEnabled(false);
-                barChartHourlyEvents.animateY(1000);
-                barChartHourlyEvents.invalidate();
-            });
-        });
+        if (fabAddLogEntry != null) {
+            fabAddLogEntry.setOnClickListener(v -> showAddLogEntryDialog());
+        }
     }
 
-    private void setupMonthlyEventsChart() {
-        AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> entries = db.logEntryDao().getAllLogEntries();
-            if (getActivity() == null) return;
+    @Override
+    public void onResume() {
+        super.onResume();
+        loadAndDisplayLogEntries();
+    }
 
-            getActivity().runOnUiThread(() -> {
-                if (entries == null || entries.isEmpty()) {
-                    barChartMonthlyEvents.clear();
-                    barChartMonthlyEvents.invalidate();
+    private void showAddLogEntryDialog() {
+        if (getContext() == null || getActivity() == null) {
+            if (getContext() != null) { // Check context before showing Toast
+                Toast.makeText(requireContext().getApplicationContext(), "Cannot show dialog, context error.", Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
+        LayoutInflater inflater = requireActivity().getLayoutInflater();
+        View dialogView = inflater.inflate(R.layout.dialog_add_log_entry, null); // Make sure R.layout.dialog_add_log_entry exists
+        builder.setView(dialogView);
+
+        final EditText editTextEventName = dialogView.findViewById(R.id.edit_text_event_name);
+        final EditText editTextNotes = dialogView.findViewById(R.id.edit_text_notes);
+
+        builder.setTitle("Record New Event")
+                .setPositiveButton("Save", null)
+                .setNegativeButton("Cancel", (dialog, id) -> dialog.dismiss());
+
+        AlertDialog dialog = builder.create();
+
+        dialog.setOnShowListener(dialogInterface -> {
+            Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            positiveButton.setOnClickListener(v -> {
+                String eventName = editTextEventName.getText().toString().trim();
+                String notes = editTextNotes.getText().toString().trim();
+
+                if (TextUtils.isEmpty(eventName)) {
+                    editTextEventName.setError("Event name cannot be empty.");
+                    if(getContext() != null) {
+                        Toast.makeText(getContext(), "Event name cannot be empty.", Toast.LENGTH_SHORT).show();
+                    }
                     return;
                 }
 
-                int[] monthlyCounts = new int[12]; // For 12 months
-                Calendar calendar = Calendar.getInstance();
+                LogEntry newLogEntry = new LogEntry(); // Make sure LogEntry is correctly imported/defined
+                newLogEntry.setTimestamp(new Date().getTime());
+                newLogEntry.setEvent(eventName);
 
-                for (LogEntry entry : entries) {
-                    calendar.setTimeInMillis(entry.getTimestamp());
-                    int month = calendar.get(Calendar.MONTH); // 0 (Jan) to 11 (Dec)
-                    if (month >= 0 && month < 12) {
-                        monthlyCounts[month]++;
-                    }
+                if (!TextUtils.isEmpty(notes)) {
+                    newLogEntry.setNotes(notes);
+                } else {
+                    newLogEntry.setNotes(null);
                 }
 
-                ArrayList<BarEntry> barEntries = new ArrayList<>();
-                for (int i = 0; i < 12; i++) {
-                    barEntries.add(new BarEntry(i, monthlyCounts[i]));
+                if (db == null) {
+                    if(getContext() != null) {
+                        Toast.makeText(getContext(), "Database not available.", Toast.LENGTH_SHORT).show();
+                    }
+                    return;
                 }
 
-                BarDataSet dataSet = new BarDataSet(barEntries, "Events per Month");
-                dataSet.setColors(ColorTemplate.PASTEL_COLORS); // Using different colors
-                dataSet.setValueTextColor(Color.BLACK);
-                dataSet.setValueTextSize(10f);
-                dataSet.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        if (value == 0) {
-                            return "";
-                        }
-                        return String.valueOf((int) value);
+                AppDatabase.databaseWriteExecutor.execute(() -> {
+                    if (db.logEntryDao() != null) { // Check if DAO is available
+                        db.logEntryDao().insert(newLogEntry);
+                    }
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if(getContext() != null) {
+                                Toast.makeText(getContext(), "Event recorded.", Toast.LENGTH_SHORT).show();
+                            }
+                            loadAndDisplayLogEntries();
+                            dialog.dismiss();
+                        });
                     }
                 });
-
-                BarData barData = new BarData(dataSet);
-                barData.setBarWidth(0.9f);
-
-                barChartMonthlyEvents.getDescription().setEnabled(false);
-                barChartMonthlyEvents.setDrawGridBackground(false);
-                barChartMonthlyEvents.setFitBars(true);
-                barChartMonthlyEvents.setData(barData);
-                barChartMonthlyEvents.setDrawBorders(false);
-                barChartMonthlyEvents.getLegend().setEnabled(false);
-
-                XAxis xAxis = barChartMonthlyEvents.getXAxis();
-                xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
-                xAxis.setGranularity(1f);
-                xAxis.setLabelCount(12, false);
-                xAxis.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        return String.valueOf((int) value + 1); // Display 1-12 for months
-                    }
-                });
-                xAxis.setDrawGridLines(false);
-
-                YAxis leftAxis = barChartMonthlyEvents.getAxisLeft();
-                leftAxis.setAxisMinimum(0f);
-                leftAxis.setGranularity(1f);
-                leftAxis.setGranularityEnabled(true);
-                leftAxis.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        return String.valueOf((int) value);
-                    }
-                });
-                leftAxis.setDrawGridLines(false);
-
-                barChartMonthlyEvents.getAxisRight().setEnabled(false);
-                barChartMonthlyEvents.animateY(1000);
-                barChartMonthlyEvents.invalidate();
             });
+        });
+        dialog.show();
+    }
+
+    private void loadAndDisplayLogEntries() {
+        if (db == null || logEntryAdapter == null) {
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    if (textViewNoEntries != null) {
+                        textViewNoEntries.setText("App components not ready.");
+                        textViewNoEntries.setVisibility(View.VISIBLE);
+                    }
+                    if (recyclerViewLogEntries != null) {
+                        recyclerViewLogEntries.setVisibility(View.GONE);
+                    }
+                });
+            }
+            return;
+        }
+
+        AppDatabase.databaseWriteExecutor.execute(() -> {
+            if (db.logEntryDao() == null) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        if (textViewNoEntries != null) {
+                            textViewNoEntries.setText("Database access error.");
+                            textViewNoEntries.setVisibility(View.VISIBLE);
+                        }
+                        if (recyclerViewLogEntries != null) {
+                            recyclerViewLogEntries.setVisibility(View.GONE);
+                        }
+                    });
+                }
+                return;
+            }
+            List<LogEntry> logEntries = db.logEntryDao().getAllLogEntries();
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    if (logEntries != null && !logEntries.isEmpty()) {
+                        logEntryAdapter.setLogEntries(logEntries);
+                        if(recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.VISIBLE);
+                        if (textViewNoEntries != null) {
+                            textViewNoEntries.setVisibility(View.GONE);
+                        }
+                    } else {
+                        if (logEntryAdapter != null) { // Ensure adapter is not null before setting
+                            logEntryAdapter.setLogEntries(new ArrayList<>());
+                        }
+                        if(recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.GONE);
+                        if (textViewNoEntries != null) {
+                            textViewNoEntries.setVisibility(View.VISIBLE);
+                            textViewNoEntries.setText("No log entries yet.");
+                        }
+                    }
+                });
+            }
         });
     }
 }

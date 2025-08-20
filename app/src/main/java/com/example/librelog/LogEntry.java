@@ -3,8 +3,6 @@ package com.example.librelog;
 import androidx.room.Entity;
 import androidx.room.PrimaryKey;
 
-import java.util.Date; // Added for consistency if we were to use Date, but sticking to long for now
-
 @Entity(tableName = "log_entries")
 public class LogEntry {
     @PrimaryKey(autoGenerate = true)
