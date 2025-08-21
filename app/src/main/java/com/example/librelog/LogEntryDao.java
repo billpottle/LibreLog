@@ -26,19 +26,30 @@ public interface LogEntryDao {
     @Query("DELETE FROM log_entries")
     void deleteAll(); // Keep this if you use it
 
-    @Query("SELECT * FROM log_entries ORDER BY timestamp DESC")
-    List<LogEntry> getAllLogEntries(); // Existing method
+    // **** MODIFIED METHOD ****
+    @Query("SELECT * FROM log_entries WHERE event_type_id = :eventTypeId ORDER BY timestamp DESC")
+    List<LogEntry> getAllLogEntries(long eventTypeId);
 
-    // **** ADD THIS METHOD ****
-    @Query("SELECT * FROM log_entries ORDER BY timestamp DESC LIMIT :limit")
-    List<LogEntry> getRecentLogEntries(int limit);
+    // **** MODIFIED METHOD ****
+    // If you want a version to get ALL entries regardless of type, you might need a separate method
+    // or a more complex query if an "all types" ID is passed.
+    // For now, this strictly filters by eventTypeId.
+    @Query("SELECT * FROM log_entries ORDER BY timestamp DESC")
+    List<LogEntry> getAllLogEntriesNoFilter();
+
+
+    // **** MODIFIED METHOD ****
+    @Query("SELECT * FROM log_entries WHERE event_type_id = :eventTypeId ORDER BY timestamp DESC LIMIT :limit")
+    List<LogEntry> getRecentLogEntries(long eventTypeId, int limit);
 
     // Keep your chart-related queries if they are in use
-    @Query("SELECT strftime('%H', datetime(timestamp/1000, 'unixepoch', 'localtime')) as hour, COUNT(*) as count FROM log_entries GROUP BY hour ORDER BY hour ASC")
-    List<EventCountByHour> getEventCountByHour();
+    // **** MODIFIED METHOD ****
+    @Query("SELECT strftime('%H', datetime(timestamp/1000, 'unixepoch', 'localtime')) as hour, COUNT(*) as count FROM log_entries WHERE event_type_id = :eventTypeId GROUP BY hour ORDER BY hour ASC")
+    List<EventCountByHour> getEventCountByHour(long eventTypeId);
 
-    @Query("SELECT strftime('%d', datetime(timestamp/1000, 'unixepoch', 'localtime')) as day, COUNT(*) as count FROM log_entries GROUP BY day ORDER BY day ASC")
-    List<EventCountByDay> getEventCountByDay();
+    // **** MODIFIED METHOD ****
+    @Query("SELECT strftime('%d', datetime(timestamp/1000, 'unixepoch', 'localtime')) as day, COUNT(*) as count FROM log_entries WHERE event_type_id = :eventTypeId GROUP BY day ORDER BY day ASC")
+    List<EventCountByDay> getEventCountByDay(long eventTypeId);
 
     // Ensure these inner classes (or separate files) for chart data exist if queries are used
     class EventCountByHour {
@@ -51,4 +62,3 @@ public interface LogEntryDao {
         public int count;
     }
 }
-

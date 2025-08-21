@@ -76,7 +76,7 @@ public class OutputFragment extends Fragment {
 
     private void exportDataToUri(Uri uri) {
         AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> logEntries = db.logEntryDao().getAllLogEntries(); // Assuming this method exists and fetches all data
+            List<LogEntry> logEntries = db.logEntryDao().getAllLogEntriesNoFilter(); // Assuming this method exists and fetches all data
 
             if (getActivity() == null) return;
 

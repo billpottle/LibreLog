@@ -41,8 +41,11 @@ import com.google.android.material.textfield.TextInputEditText;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class HomeFragment extends Fragment {
@@ -55,13 +58,13 @@ public class HomeFragment extends Fragment {
     private FloatingActionButton fabAddLogEntry;
     private AppDatabase db;
 
-    // Chart related views
     private BarChart barChartHourlyEvents;
-    private BarChart barChartMonthlyEvents;
+    private BarChart barChartDailyEvents; // Renamed from barChartMonthlyEvents for clarity with DAO
     private AutoCompleteTextView dropdownEventTypesAutocomplete;
 
-
-    private List<EventType> availableEventTypes = new ArrayList<>(); // Cache for spinner items
+    private List<EventType> availableEventTypes = new ArrayList<>();
+    private Map<String, Long> eventTypeNameToIdMap = new HashMap<>();
+    private long selectedEventTypeId = 1L; // Default to Event Type ID 1
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -81,44 +84,42 @@ public class HomeFragment extends Fragment {
         fabAddLogEntry = view.findViewById(R.id.fab_add_log_entry);
 
         barChartHourlyEvents = view.findViewById(R.id.bar_chart_hourly_events);
-        barChartMonthlyEvents = view.findViewById(R.id.bar_chart_monthly_events);
+        barChartDailyEvents = view.findViewById(R.id.bar_chart_monthly_events); // Assuming this is the correct ID from your XML
         dropdownEventTypesAutocomplete = view.findViewById(R.id.dropdown_event_types_autocomplete);
 
-
         setupRecyclerView();
-        // loadAndDisplayLogEntries(); // Will be called in onResume
-        // setupHourlyEventsChart(); // Will be called in onResume
-        // setupMonthlyEventsChart(); // Will be called in onResume
-
         fabAddLogEntry.setOnClickListener(v -> showAddLogEntryDialog());
         
-        // Fetch event types and then setup dropdown
-        fetchEventTypesAndSetupDropdown();
+        fetchEventTypesAndSetupDropdown(); // This will also trigger initial data load
 
         return view;
     }
 
     @Override
-    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
-        // Data loading and chart setup is now primarily in onResume or triggered after data fetch
-    }
-
-
-    @Override
     public void onResume() {
         super.onResume();
-        loadAndDisplayLogEntries();
-        setupHourlyEventsChart();
-        setupMonthlyEventsChart();
-        fetchEventTypesAndSetupDropdown(); // Refresh dropdown data as well
+        // Data is now loaded/refreshed via fetchEventTypesAndSetupDropdown or dropdown selection
+        // If event types haven't changed, but data might have, you could add a direct refresh here:
+        // refreshAllEventData(); 
+        // However, fetchEventTypesAndSetupDropdown in onResume already triggers refreshAllEventData
+        // if event types are loaded.
     }
 
     private void fetchEventTypesAndSetupDropdown() {
         AppDatabase.databaseWriteExecutor.execute(() -> {
             availableEventTypes = eventTypeDao.getAllEventTypes();
+            eventTypeNameToIdMap.clear();
+            if (availableEventTypes != null) {
+                for (EventType type : availableEventTypes) {
+                    eventTypeNameToIdMap.put(type.getEventName(), (long) type.getEventTypeId());
+                }
+            }
+
             if (getActivity() != null) {
-                getActivity().runOnUiThread(this::setupEventTypeDropdown);
+                getActivity().runOnUiThread(() -> {
+                    setupEventTypeDropdown();
+                    refreshAllEventData(); // Load data with default or current selectedEventTypeId
+                });
             }
         });
     }
@@ -129,19 +130,105 @@ public class HomeFragment extends Fragment {
         }
 
         List<String> eventTypeNames = availableEventTypes.stream()
-                                .map(EventType::getEventName)
-                                .collect(Collectors.toList());
+                .map(EventType::getEventName)
+                .collect(Collectors.toList());
 
         ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(),
                 android.R.layout.simple_dropdown_item_1line, eventTypeNames);
         dropdownEventTypesAutocomplete.setAdapter(adapter);
 
+        // Set initial text for the dropdown based on selectedEventTypeId
+        String initialDropdownText = "";
+        Optional<EventType> defaultEventType = availableEventTypes.stream()
+                .filter(et -> et.getEventTypeId() == selectedEventTypeId)
+                .findFirst();
+
+        if (defaultEventType.isPresent()) {
+            initialDropdownText = defaultEventType.get().getEventName();
+        } else if (!eventTypeNames.isEmpty()) {
+            // Fallback to the first available if ID 1 doesn't exist or isn't in the list
+            // and update selectedEventTypeId accordingly
+            initialDropdownText = eventTypeNames.get(0);
+            selectedEventTypeId = eventTypeNameToIdMap.getOrDefault(initialDropdownText, -1L);
+        }
+        
+        dropdownEventTypesAutocomplete.setText(initialDropdownText, false);
+
+
         if (eventTypeNames.isEmpty()) {
-            // Optionally, set a hint or disable the dropdown if no types are available
             dropdownEventTypesAutocomplete.setHint("No event types defined");
         } else {
-            // Optionally, set a default selection or hint
-            dropdownEventTypesAutocomplete.setHint("Select Event Type");
+             dropdownEventTypesAutocomplete.setHint("Select Event Type");
+        }
+
+        dropdownEventTypesAutocomplete.setOnItemClickListener((parent, view, position, id) -> {
+            String selectedName = (String) parent.getItemAtPosition(position);
+            long newSelectedId = eventTypeNameToIdMap.getOrDefault(selectedName, -1L);
+
+            if (newSelectedId != -1L && newSelectedId != selectedEventTypeId) {
+                selectedEventTypeId = newSelectedId;
+                refreshAllEventData();
+            } else if (newSelectedId == -1L) {
+                Toast.makeText(getContext(), "Could not find ID for selected event type.", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    private void refreshAllEventData() {
+        if (selectedEventTypeId == -1L && !eventTypeNameToIdMap.isEmpty()) {
+             // If selected ID is somehow invalid but we have types, try to pick the first one.
+             Optional<String> firstName = eventTypeNameToIdMap.keySet().stream().findFirst();
+             if(firstName.isPresent()){
+                 selectedEventTypeId = eventTypeNameToIdMap.get(firstName.get());
+             } else {
+                 // No event types available to select
+                 if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        clearAllUIData();
+                        Toast.makeText(getContext(), "No event types available to filter by.", Toast.LENGTH_LONG).show();
+                    });
+                }
+                return;
+             }
+        } else if (eventTypeNameToIdMap.isEmpty()) {
+            // No event types at all
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(this::clearAllUIData);
+            }
+            return;
+        }
+
+
+        AppDatabase.databaseWriteExecutor.execute(() -> {
+            // Ensure DAO methods are called with the currently selectedEventTypeId
+            List<LogEntry> recentLogEntries = logEntryDao.getRecentLogEntries(selectedEventTypeId, 5);
+            List<LogEntryDao.EventCountByHour> hourlyData = logEntryDao.getEventCountByHour(selectedEventTypeId);
+            List<LogEntryDao.EventCountByDay> dailyData = logEntryDao.getEventCountByDay(selectedEventTypeId);
+
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    updateRecentEventsUI(recentLogEntries);
+                    updateHourlyEventsChart(hourlyData);
+                    updateDailyEventsChart(dailyData); // Renamed from setupMonthlyEventsChart
+                });
+            }
+        });
+    }
+    
+    private void clearAllUIData() {
+        if (logEntryAdapter != null) logEntryAdapter.setLogEntries(new ArrayList<>());
+        if (textViewNoEntries != null) {
+            textViewNoEntries.setText("No data to display. Select an event type.");
+            textViewNoEntries.setVisibility(View.VISIBLE);
+        }
+        if (recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.GONE);
+        if (barChartHourlyEvents != null) {
+            barChartHourlyEvents.clear();
+            barChartHourlyEvents.invalidate();
+        }
+        if (barChartDailyEvents != null) {
+            barChartDailyEvents.clear();
+            barChartDailyEvents.invalidate();
         }
     }
 
@@ -153,208 +240,179 @@ public class HomeFragment extends Fragment {
         recyclerViewLogEntries.setAdapter(logEntryAdapter);
     }
 
-    private void loadAndDisplayLogEntries() {
-        if (db == null || logEntryAdapter == null) {
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    if (textViewNoEntries != null) {
-                        textViewNoEntries.setText("App components not ready.");
-                        textViewNoEntries.setVisibility(View.VISIBLE);
-                    }
-                    if (recyclerViewLogEntries != null) {
-                        recyclerViewLogEntries.setVisibility(View.GONE);
-                    }
-                });
+    // Updated to accept data as a parameter
+    private void updateRecentEventsUI(List<LogEntry> logEntries) {
+        if (logEntryAdapter == null) return;
+
+        if (logEntries != null && !logEntries.isEmpty()) {
+            logEntryAdapter.setLogEntries(logEntries);
+            if (recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.VISIBLE);
+            if (textViewNoEntries != null) textViewNoEntries.setVisibility(View.GONE);
+        } else {
+            logEntryAdapter.setLogEntries(new ArrayList<>());
+            if (recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.GONE);
+            if (textViewNoEntries != null) {
+                textViewNoEntries.setText("No recent log entries for this event type.");
+                textViewNoEntries.setVisibility(View.VISIBLE);
             }
+        }
+    }
+
+    // Updated to accept data as a parameter
+    private void updateHourlyEventsChart(List<LogEntryDao.EventCountByHour> hourlyData) {
+        if (barChartHourlyEvents == null) return;
+
+        if (hourlyData == null || hourlyData.isEmpty()) {
+            barChartHourlyEvents.clear();
+            barChartHourlyEvents.setNoDataText("No hourly data for this event type.");
+            barChartHourlyEvents.invalidate();
             return;
         }
 
-        AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> logEntries = logEntryDao.getRecentLogEntries(5); 
+        ArrayList<BarEntry> barEntries = new ArrayList<>();
+        // Assuming EventCountByHour has 'hour' (String "00"-"23") and 'count' (int)
+        for (int i = 0; i < 24; i++) { // Ensure all hours are represented, even if count is 0
+            String hourString = String.format(Locale.US, "%02d", i);
+            int count = 0;
+            for(LogEntryDao.EventCountByHour item : hourlyData){
+                if(item.hour.equals(hourString)){
+                    count = item.count;
+                    break;
+                }
+            }
+            barEntries.add(new BarEntry(i, count));
+        }
 
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    if (logEntries != null && !logEntries.isEmpty()) {
-                        logEntryAdapter.setLogEntries(logEntries);
-                        if (recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.VISIBLE);
-                        if (textViewNoEntries != null) textViewNoEntries.setVisibility(View.GONE);
-                    } else {
-                        if(logEntryAdapter != null) logEntryAdapter.setLogEntries(new ArrayList<>());
-                        if (recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.GONE);
-                        if (textViewNoEntries != null) {
-                            textViewNoEntries.setText("No recent log entries to display.");
-                            textViewNoEntries.setVisibility(View.VISIBLE);
-                        }
-                    }
-                });
+
+        BarDataSet dataSet = new BarDataSet(barEntries, "Events per Hour");
+        dataSet.setColors(ColorTemplate.MATERIAL_COLORS);
+        dataSet.setValueTextColor(Color.BLACK);
+        dataSet.setValueTextSize(10f);
+        dataSet.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return value == 0 ? "" : String.valueOf((int) value);
             }
         });
+
+        BarData barData = new BarData(dataSet);
+        barData.setBarWidth(0.9f);
+
+        barChartHourlyEvents.getDescription().setEnabled(false);
+        barChartHourlyEvents.setDrawGridBackground(false);
+        barChartHourlyEvents.setFitBars(true);
+        barChartHourlyEvents.setData(barData);
+        barChartHourlyEvents.setDrawBorders(false);
+        barChartHourlyEvents.getLegend().setEnabled(false);
+
+        XAxis xAxis = barChartHourlyEvents.getXAxis();
+        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+        xAxis.setGranularity(1f);
+        xAxis.setLabelCount(24, false);
+        xAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return String.format(Locale.US, "%02d", (int)value);
+            }
+        });
+        xAxis.setDrawGridLines(false);
+
+        YAxis leftAxis = barChartHourlyEvents.getAxisLeft();
+        leftAxis.setAxisMinimum(0f);
+        leftAxis.setGranularity(1f);
+        leftAxis.setGranularityEnabled(true);
+        leftAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return String.valueOf((int) value);
+            }
+        });
+        leftAxis.setDrawGridLines(true); // Keep grid lines for Y-axis for better readability
+
+        barChartHourlyEvents.getAxisRight().setEnabled(false);
+        barChartHourlyEvents.animateY(1000);
+        barChartHourlyEvents.invalidate();
     }
 
-    private void setupHourlyEventsChart() {
-        AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> entries = db.logEntryDao().getAllLogEntries(); 
-            if (getActivity() == null || barChartHourlyEvents == null) return;
+    // Renamed from setupMonthlyEventsChart and updated to accept data
+    private void updateDailyEventsChart(List<LogEntryDao.EventCountByDay> dailyData) {
+         if (barChartDailyEvents == null) return;
 
-            getActivity().runOnUiThread(() -> {
-                if (entries == null || entries.isEmpty()) {
-                    barChartHourlyEvents.clear();
-                    barChartHourlyEvents.invalidate(); 
-                    return;
-                }
+        if (dailyData == null || dailyData.isEmpty()) {
+            barChartDailyEvents.clear();
+            barChartDailyEvents.setNoDataText("No daily data for this event type.");
+            barChartDailyEvents.invalidate();
+            return;
+        }
 
-                int[] hourlyCounts = new int[24]; 
-                Calendar calendar = Calendar.getInstance();
+        ArrayList<BarEntry> barEntries = new ArrayList<>();
+        // Assuming EventCountByDay has 'day' (String "01"-"31") and 'count' (int)
+        // For simplicity, let's assume we want to show up to 31 days.
+        // A more robust solution might use the actual days from the data or current month.
+        Map<Integer, Integer> dayCountsMap = new HashMap<>();
+        for (LogEntryDao.EventCountByDay item : dailyData) {
+            try {
+                dayCountsMap.put(Integer.parseInt(item.day), item.count);
+            } catch (NumberFormatException e) {
+                // Skip malformed day string
+            }
+        }
+        
+        int maxDay = Calendar.getInstance().getActualMaximum(Calendar.DAY_OF_MONTH); // Days in current month
 
-                for (LogEntry entry : entries) {
-                    calendar.setTimeInMillis(entry.getTimestamp());
-                    int hourOfDay = calendar.get(Calendar.HOUR_OF_DAY);
-                    if (hourOfDay >= 0 && hourOfDay < 24) {
-                        hourlyCounts[hourOfDay]++;
-                    }
-                }
+        for (int i = 1; i <= maxDay; i++) {
+            barEntries.add(new BarEntry(i, dayCountsMap.getOrDefault(i, 0)));
+        }
 
-                ArrayList<BarEntry> barEntries = new ArrayList<>();
-                for (int i = 0; i < 24; i++) {
-                    barEntries.add(new BarEntry(i, hourlyCounts[i]));
-                }
 
-                BarDataSet dataSet = new BarDataSet(barEntries, "Events per Hour");
-                dataSet.setColors(ColorTemplate.MATERIAL_COLORS);
-                dataSet.setValueTextColor(Color.BLACK); 
-                dataSet.setValueTextSize(10f);
-                dataSet.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        if (value == 0) {
-                            return ""; 
-                        }
-                        return String.valueOf((int) value);
-                    }
-                });
-
-                BarData barData = new BarData(dataSet);
-                barData.setBarWidth(0.9f);
-
-                barChartHourlyEvents.getDescription().setEnabled(false);
-                barChartHourlyEvents.setDrawGridBackground(false);
-                barChartHourlyEvents.setFitBars(true);
-                barChartHourlyEvents.setData(barData);
-                barChartHourlyEvents.setDrawBorders(false);
-                barChartHourlyEvents.getLegend().setEnabled(false); 
-
-                XAxis xAxis = barChartHourlyEvents.getXAxis();
-                xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
-                xAxis.setGranularity(1f);
-                xAxis.setLabelCount(24, false); 
-                xAxis.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        return String.valueOf((int) value); 
-                    }
-                });
-                xAxis.setDrawGridLines(false); 
-
-                YAxis leftAxis = barChartHourlyEvents.getAxisLeft();
-                leftAxis.setAxisMinimum(0f); 
-                leftAxis.setGranularity(1f); 
-                leftAxis.setGranularityEnabled(true);
-                leftAxis.setValueFormatter(new ValueFormatter() {
-                     @Override
-                     public String getFormattedValue(float value) {
-                        return String.valueOf((int) value);
-                    }
-                });
-                leftAxis.setDrawGridLines(false); 
-
-                barChartHourlyEvents.getAxisRight().setEnabled(false); 
-                barChartHourlyEvents.animateY(1000); 
-                barChartHourlyEvents.invalidate(); 
-            });
+        BarDataSet dataSet = new BarDataSet(barEntries, "Events per Day");
+        dataSet.setColors(ColorTemplate.PASTEL_COLORS);
+        dataSet.setValueTextColor(Color.BLACK);
+        dataSet.setValueTextSize(10f);
+        dataSet.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return value == 0 ? "" : String.valueOf((int) value);
+            }
         });
-    }
 
-    private void setupMonthlyEventsChart() {
-        AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> entries = db.logEntryDao().getAllLogEntries(); 
-            if (getActivity() == null || barChartMonthlyEvents == null) return;
+        BarData barData = new BarData(dataSet);
+        barData.setBarWidth(0.9f);
 
-            getActivity().runOnUiThread(() -> {
-                if (entries == null || entries.isEmpty()) {
-                    barChartMonthlyEvents.clear();
-                    barChartMonthlyEvents.invalidate();
-                    return;
-                }
+        barChartDailyEvents.getDescription().setEnabled(false);
+        barChartDailyEvents.setDrawGridBackground(false);
+        barChartDailyEvents.setFitBars(true);
+        barChartDailyEvents.setData(barData);
+        barChartDailyEvents.setDrawBorders(false);
+        barChartDailyEvents.getLegend().setEnabled(false);
 
-                int[] monthlyCounts = new int[12]; 
-                Calendar calendar = Calendar.getInstance();
-
-                for (LogEntry entry : entries) {
-                    calendar.setTimeInMillis(entry.getTimestamp());
-                    int month = calendar.get(Calendar.MONTH); 
-                    if (month >= 0 && month < 12) {
-                        monthlyCounts[month]++;
-                    }
-                }
-
-                ArrayList<BarEntry> barEntries = new ArrayList<>();
-                for (int i = 0; i < 12; i++) {
-                    barEntries.add(new BarEntry(i, monthlyCounts[i]));
-                }
-
-                BarDataSet dataSet = new BarDataSet(barEntries, "Events per Month");
-                dataSet.setColors(ColorTemplate.PASTEL_COLORS);
-                dataSet.setValueTextColor(Color.BLACK);
-                dataSet.setValueTextSize(10f);
-                dataSet.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        if (value == 0) {
-                            return "";
-                        }
-                        return String.valueOf((int) value);
-                    }
-                });
-
-                BarData barData = new BarData(dataSet);
-                barData.setBarWidth(0.9f);
-
-                barChartMonthlyEvents.getDescription().setEnabled(false);
-                barChartMonthlyEvents.setDrawGridBackground(false);
-                barChartMonthlyEvents.setFitBars(true);
-                barChartMonthlyEvents.setData(barData);
-                barChartMonthlyEvents.setDrawBorders(false);
-                barChartMonthlyEvents.getLegend().setEnabled(false);
-
-                XAxis xAxis = barChartMonthlyEvents.getXAxis();
-                xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
-                xAxis.setGranularity(1f);
-                xAxis.setLabelCount(12, false);
-                xAxis.setValueFormatter(new ValueFormatter() {
-                    @Override
-                    public String getFormattedValue(float value) {
-                        return String.valueOf((int) value + 1); 
-                    }
-                });
-                xAxis.setDrawGridLines(false);
-
-                YAxis leftAxis = barChartMonthlyEvents.getAxisLeft();
-                leftAxis.setAxisMinimum(0f);
-                leftAxis.setGranularity(1f);
-                leftAxis.setGranularityEnabled(true);
-                 leftAxis.setValueFormatter(new ValueFormatter() {
-                     @Override
-                     public String getFormattedValue(float value) {
-                        return String.valueOf((int) value);
-                    }
-                });
-                leftAxis.setDrawGridLines(false);
-
-                barChartMonthlyEvents.getAxisRight().setEnabled(false);
-                barChartMonthlyEvents.animateY(1000);
-                barChartMonthlyEvents.invalidate();
-            });
+        XAxis xAxis = barChartDailyEvents.getXAxis();
+        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+        xAxis.setGranularity(1f);
+        //xAxis.setLabelCount(maxDay, false); // Adjust label count if needed
+        xAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return String.valueOf((int) value); // Day number
+            }
         });
+        xAxis.setDrawGridLines(false);
+
+        YAxis leftAxis = barChartDailyEvents.getAxisLeft();
+        leftAxis.setAxisMinimum(0f);
+        leftAxis.setGranularity(1f);
+        leftAxis.setGranularityEnabled(true);
+        leftAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return String.valueOf((int) value);
+            }
+        });
+        leftAxis.setDrawGridLines(true);
+
+        barChartDailyEvents.getAxisRight().setEnabled(false);
+        barChartDailyEvents.animateY(1000);
+        barChartDailyEvents.invalidate();
     }
 
     private void showAddLogEntryDialog() {
@@ -366,22 +424,19 @@ public class HomeFragment extends Fragment {
         Spinner spinnerEventType = dialogView.findViewById(R.id.spinner_event_type);
         TextInputEditText editTextNotes = dialogView.findViewById(R.id.edit_text_notes);
 
-        // Ensure availableEventTypes is up-to-date for the dialog as well
-        // It's fetched in onResume, which should be recent enough.
-        // If not, consider a fresh fetch here or a more robust LiveData approach.
-        List<String> eventTypeNames = new ArrayList<>();
+        List<String> eventTypeNamesForDialog = new ArrayList<>();
         if (availableEventTypes != null) {
             for (EventType type : availableEventTypes) {
-                eventTypeNames.add(type.getEventName());
+                eventTypeNamesForDialog.add(type.getEventName());
             }
         }
 
         ArrayAdapter<String> spinnerAdapter = new ArrayAdapter<>(requireContext(),
-                android.R.layout.simple_spinner_item, eventTypeNames);
+                android.R.layout.simple_spinner_item, eventTypeNamesForDialog);
         spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerEventType.setAdapter(spinnerAdapter);
 
-        if (eventTypeNames.isEmpty()) {
+        if (eventTypeNamesForDialog.isEmpty()) {
             Toast.makeText(getContext(), "No event types defined. Please add some in Settings.", Toast.LENGTH_LONG).show();
         }
 
@@ -396,35 +451,31 @@ public class HomeFragment extends Fragment {
                 String notes = editTextNotes.getText() != null ? editTextNotes.getText().toString().trim() : "";
 
                 if (availableEventTypes == null || availableEventTypes.isEmpty() || selectedPosition == Spinner.INVALID_POSITION) {
-                    if (availableEventTypes == null || availableEventTypes.isEmpty()) {
-                        Toast.makeText(getContext(), "No event types available. Add them in Settings first.", Toast.LENGTH_LONG).show();
-                    } else {
-                        Toast.makeText(getContext(), "Please select an event type.", Toast.LENGTH_SHORT).show();
-                    }
+                    Toast.makeText(getContext(), "Please select an event type or add one in Settings.", Toast.LENGTH_LONG).show();
                     return;
                 }
 
-                EventType selectedEventType = availableEventTypes.get(selectedPosition);
+                EventType selectedEventTypeForDialog = availableEventTypes.get(selectedPosition);
 
                 LogEntry newLogEntry = new LogEntry();
                 newLogEntry.setTimestamp(new Date().getTime());
-                newLogEntry.setEventTypeId(selectedEventType.getEventTypeId());
-                newLogEntry.setEvent(selectedEventType.getEventName()); 
+                newLogEntry.setEventTypeId(selectedEventTypeForDialog.getEventTypeId()); // This should be fine if EventType.eventTypeId is int
+                newLogEntry.setEvent(selectedEventTypeForDialog.getEventName());
                 newLogEntry.setNotes(notes);
 
                 AppDatabase.databaseWriteExecutor.execute(() -> {
                     logEntryDao.insert(newLogEntry);
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
-                            loadAndDisplayLogEntries(); 
-                            setupHourlyEventsChart();   
-                            setupMonthlyEventsChart();  
-                            fetchEventTypesAndSetupDropdown(); // Refresh dropdown in case event types changed
+                            // If the new entry's type matches the currently selected filter, refresh
+                            if (selectedEventTypeForDialog.getEventTypeId() == selectedEventTypeId) { // Direct comparison of int and long is fine here
+                                refreshAllEventData();
+                            }
+                            Toast.makeText(getContext(), "Log entry added.", Toast.LENGTH_SHORT).show();
                         });
                     }
                 });
                 dialog.dismiss();
-                Toast.makeText(getContext(), "Log entry added.", Toast.LENGTH_SHORT).show();
             });
         });
         dialog.show();
