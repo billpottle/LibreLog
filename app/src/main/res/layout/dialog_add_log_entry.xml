@@ -6,31 +6,44 @@
     android:padding="24dp">
 
     <TextView
-        android:id="@+id/dialog_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Record New Event"
-        android:textSize="20sp"
-        android:textStyle="bold"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
         android:layout_marginBottom="16dp"/>
 
-    <EditText
-        android:id="@+id/edit_text_event_name"
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Select Event Type:"
+        style="@style/TextAppearance.MaterialComponents.Caption"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="4dp"/>
+
+    <Spinner
+        android:id="@+id/spinner_event_type"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Event Name (e.g., App Started)"
-        android:inputType="textCapSentences"
         android:minHeight="48dp"
-        android:layout_marginBottom="16dp"/>
+        android:layout_marginBottom="16dp"
+        style="@style/Widget.AppCompat.Spinner.Underlined"/>
+    <!-- Or use MaterialComponents.TextInputLayout with an AutoCompleteTextView for a more modern dropdown -->
+    <!-- For simplicity, standard Spinner is used here -->
 
-    <EditText
-        android:id="@+id/edit_text_notes"
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/text_input_layout_notes"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Notes (Optional)"
-        android:inputType="textCapSentences|textMultiLine"
-        android:minLines="2"
-        android:gravity="top"
-        android:minHeight="48dp" />
+        android:hint="Optional Notes">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/edit_text_notes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textMultiLine|textCapSentences"
+            android:minLines="2"
+            android:gravity="top"/>
+    </com.google.android.material.textfield.TextInputLayout>
 
 </LinearLayout>
