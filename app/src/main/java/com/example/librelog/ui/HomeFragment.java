@@ -7,6 +7,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -42,6 +43,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 public class HomeFragment extends Fragment {
 
@@ -56,6 +58,8 @@ public class HomeFragment extends Fragment {
     // Chart related views
     private BarChart barChartHourlyEvents;
     private BarChart barChartMonthlyEvents;
+    private AutoCompleteTextView dropdownEventTypesAutocomplete;
+
 
     private List<EventType> availableEventTypes = new ArrayList<>(); // Cache for spinner items
 
@@ -78,20 +82,28 @@ public class HomeFragment extends Fragment {
 
         barChartHourlyEvents = view.findViewById(R.id.bar_chart_hourly_events);
         barChartMonthlyEvents = view.findViewById(R.id.bar_chart_monthly_events);
+        dropdownEventTypesAutocomplete = view.findViewById(R.id.dropdown_event_types_autocomplete);
+
 
         setupRecyclerView();
-        loadAndDisplayLogEntries();
-        setupHourlyEventsChart();
-        setupMonthlyEventsChart();
+        // loadAndDisplayLogEntries(); // Will be called in onResume
+        // setupHourlyEventsChart(); // Will be called in onResume
+        // setupMonthlyEventsChart(); // Will be called in onResume
 
         fabAddLogEntry.setOnClickListener(v -> showAddLogEntryDialog());
-
-        AppDatabase.databaseWriteExecutor.execute(() -> {
-            availableEventTypes = eventTypeDao.getAllEventTypes();
-        });
+        
+        // Fetch event types and then setup dropdown
+        fetchEventTypesAndSetupDropdown();
 
         return view;
     }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        // Data loading and chart setup is now primarily in onResume or triggered after data fetch
+    }
+
 
     @Override
     public void onResume() {
@@ -99,10 +111,40 @@ public class HomeFragment extends Fragment {
         loadAndDisplayLogEntries();
         setupHourlyEventsChart();
         setupMonthlyEventsChart();
+        fetchEventTypesAndSetupDropdown(); // Refresh dropdown data as well
+    }
+
+    private void fetchEventTypesAndSetupDropdown() {
         AppDatabase.databaseWriteExecutor.execute(() -> {
             availableEventTypes = eventTypeDao.getAllEventTypes();
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(this::setupEventTypeDropdown);
+            }
         });
     }
+
+    private void setupEventTypeDropdown() {
+        if (getContext() == null || dropdownEventTypesAutocomplete == null || availableEventTypes == null) {
+            return;
+        }
+
+        List<String> eventTypeNames = availableEventTypes.stream()
+                                .map(EventType::getEventName)
+                                .collect(Collectors.toList());
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(getContext(),
+                android.R.layout.simple_dropdown_item_1line, eventTypeNames);
+        dropdownEventTypesAutocomplete.setAdapter(adapter);
+
+        if (eventTypeNames.isEmpty()) {
+            // Optionally, set a hint or disable the dropdown if no types are available
+            dropdownEventTypesAutocomplete.setHint("No event types defined");
+        } else {
+            // Optionally, set a default selection or hint
+            dropdownEventTypesAutocomplete.setHint("Select Event Type");
+        }
+    }
+
 
     private void setupRecyclerView() {
         if (recyclerViewLogEntries == null) return;
@@ -128,7 +170,7 @@ public class HomeFragment extends Fragment {
         }
 
         AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> logEntries = logEntryDao.getRecentLogEntries(5); // Still fetches 5 for the list
+            List<LogEntry> logEntries = logEntryDao.getRecentLogEntries(5); 
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
@@ -151,17 +193,17 @@ public class HomeFragment extends Fragment {
 
     private void setupHourlyEventsChart() {
         AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> entries = db.logEntryDao().getAllLogEntries(); // Charts use all entries
+            List<LogEntry> entries = db.logEntryDao().getAllLogEntries(); 
             if (getActivity() == null || barChartHourlyEvents == null) return;
 
             getActivity().runOnUiThread(() -> {
                 if (entries == null || entries.isEmpty()) {
                     barChartHourlyEvents.clear();
-                    barChartHourlyEvents.invalidate(); // Refresh the chart to show it's empty
+                    barChartHourlyEvents.invalidate(); 
                     return;
                 }
 
-                int[] hourlyCounts = new int[24]; // For 24 hours
+                int[] hourlyCounts = new int[24]; 
                 Calendar calendar = Calendar.getInstance();
 
                 for (LogEntry entry : entries) {
@@ -179,13 +221,13 @@ public class HomeFragment extends Fragment {
 
                 BarDataSet dataSet = new BarDataSet(barEntries, "Events per Hour");
                 dataSet.setColors(ColorTemplate.MATERIAL_COLORS);
-                dataSet.setValueTextColor(Color.BLACK); // Or use a theme color
+                dataSet.setValueTextColor(Color.BLACK); 
                 dataSet.setValueTextSize(10f);
                 dataSet.setValueFormatter(new ValueFormatter() {
                     @Override
                     public String getFormattedValue(float value) {
                         if (value == 0) {
-                            return ""; // Don't show zero values
+                            return ""; 
                         }
                         return String.valueOf((int) value);
                     }
@@ -199,23 +241,23 @@ public class HomeFragment extends Fragment {
                 barChartHourlyEvents.setFitBars(true);
                 barChartHourlyEvents.setData(barData);
                 barChartHourlyEvents.setDrawBorders(false);
-                barChartHourlyEvents.getLegend().setEnabled(false); // Hide legend
+                barChartHourlyEvents.getLegend().setEnabled(false); 
 
                 XAxis xAxis = barChartHourlyEvents.getXAxis();
                 xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
                 xAxis.setGranularity(1f);
-                xAxis.setLabelCount(24, false); // Show all 24 hour labels if possible
+                xAxis.setLabelCount(24, false); 
                 xAxis.setValueFormatter(new ValueFormatter() {
                     @Override
                     public String getFormattedValue(float value) {
-                        return String.valueOf((int) value); // Display hour number
+                        return String.valueOf((int) value); 
                     }
                 });
-                xAxis.setDrawGridLines(false); // No vertical grid lines
+                xAxis.setDrawGridLines(false); 
 
                 YAxis leftAxis = barChartHourlyEvents.getAxisLeft();
-                leftAxis.setAxisMinimum(0f); // Start Y-axis at 0
-                leftAxis.setGranularity(1f); // Steps of 1
+                leftAxis.setAxisMinimum(0f); 
+                leftAxis.setGranularity(1f); 
                 leftAxis.setGranularityEnabled(true);
                 leftAxis.setValueFormatter(new ValueFormatter() {
                      @Override
@@ -223,18 +265,18 @@ public class HomeFragment extends Fragment {
                         return String.valueOf((int) value);
                     }
                 });
-                leftAxis.setDrawGridLines(false); // No horizontal grid lines
+                leftAxis.setDrawGridLines(false); 
 
-                barChartHourlyEvents.getAxisRight().setEnabled(false); // No right Y-axis
-                barChartHourlyEvents.animateY(1000); // Animation
-                barChartHourlyEvents.invalidate(); // Refresh chart
+                barChartHourlyEvents.getAxisRight().setEnabled(false); 
+                barChartHourlyEvents.animateY(1000); 
+                barChartHourlyEvents.invalidate(); 
             });
         });
     }
 
     private void setupMonthlyEventsChart() {
         AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> entries = db.logEntryDao().getAllLogEntries(); // Charts use all entries
+            List<LogEntry> entries = db.logEntryDao().getAllLogEntries(); 
             if (getActivity() == null || barChartMonthlyEvents == null) return;
 
             getActivity().runOnUiThread(() -> {
@@ -244,12 +286,12 @@ public class HomeFragment extends Fragment {
                     return;
                 }
 
-                int[] monthlyCounts = new int[12]; // For 12 months
+                int[] monthlyCounts = new int[12]; 
                 Calendar calendar = Calendar.getInstance();
 
                 for (LogEntry entry : entries) {
                     calendar.setTimeInMillis(entry.getTimestamp());
-                    int month = calendar.get(Calendar.MONTH); // 0 (Jan) to 11 (Dec)
+                    int month = calendar.get(Calendar.MONTH); 
                     if (month >= 0 && month < 12) {
                         monthlyCounts[month]++;
                     }
@@ -291,11 +333,7 @@ public class HomeFragment extends Fragment {
                 xAxis.setValueFormatter(new ValueFormatter() {
                     @Override
                     public String getFormattedValue(float value) {
-                        // To display month names e.g., Jan, Feb, Mar
-                        // Calendar cal = Calendar.getInstance();
-                        // cal.set(Calendar.MONTH, (int) value);
-                        // return new SimpleDateFormat("MMM", Locale.getDefault()).format(cal.getTime());
-                        return String.valueOf((int) value + 1); // Display 1-12 for months
+                        return String.valueOf((int) value + 1); 
                     }
                 });
                 xAxis.setDrawGridLines(false);
@@ -328,6 +366,9 @@ public class HomeFragment extends Fragment {
         Spinner spinnerEventType = dialogView.findViewById(R.id.spinner_event_type);
         TextInputEditText editTextNotes = dialogView.findViewById(R.id.edit_text_notes);
 
+        // Ensure availableEventTypes is up-to-date for the dialog as well
+        // It's fetched in onResume, which should be recent enough.
+        // If not, consider a fresh fetch here or a more robust LiveData approach.
         List<String> eventTypeNames = new ArrayList<>();
         if (availableEventTypes != null) {
             for (EventType type : availableEventTypes) {
@@ -368,16 +409,17 @@ public class HomeFragment extends Fragment {
                 LogEntry newLogEntry = new LogEntry();
                 newLogEntry.setTimestamp(new Date().getTime());
                 newLogEntry.setEventTypeId(selectedEventType.getEventTypeId());
-                newLogEntry.setEvent(selectedEventType.getEventName()); // Storing the name for direct use if needed
+                newLogEntry.setEvent(selectedEventType.getEventName()); 
                 newLogEntry.setNotes(notes);
 
                 AppDatabase.databaseWriteExecutor.execute(() -> {
                     logEntryDao.insert(newLogEntry);
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
-                            loadAndDisplayLogEntries(); // Refresh the list
-                            setupHourlyEventsChart();   // Refresh hourly chart
-                            setupMonthlyEventsChart();  // Refresh monthly chart
+                            loadAndDisplayLogEntries(); 
+                            setupHourlyEventsChart();   
+                            setupMonthlyEventsChart();  
+                            fetchEventTypesAndSetupDropdown(); // Refresh dropdown in case event types changed
                         });
                     }
                 });

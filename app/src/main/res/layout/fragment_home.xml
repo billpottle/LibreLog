@@ -30,9 +30,26 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="24dp"
-                android:layout_marginBottom="16dp"
+                android:layout_marginBottom="8dp"
                 android:text="Event Summary"
                 android:textAppearance="@style/TextAppearance.AppCompat.Large" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/dropdown_event_types_layout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="16dp"
+                android:hint="Select Event Type">
+
+                <AutoCompleteTextView
+                    android:id="@+id/dropdown_event_types_autocomplete"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="none"
+                    tools:ignore="LabelFor" />
+            </com.google.android.material.textfield.TextInputLayout>
 
             <TextView
                 android:id="@+id/text_title_hourly_chart"
