@@ -1,5 +1,6 @@
 package com.example.librelog.ui;
 
+import android.graphics.Color;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -25,20 +26,22 @@ import com.example.librelog.LogEntryAdapter;
 import com.example.librelog.LogEntryDao;
 import com.example.librelog.R;
 import com.github.mikephil.charting.charts.BarChart;
-// Ensure you have imports for chart data if you are using MPAndroidChart
-// e.g., import com.github.mikephil.charting.data.BarData;
-// import com.github.mikephil.charting.data.BarDataSet;
-// import com.github.mikephil.charting.data.BarEntry;
-// import com.github.mikephil.charting.utils.ColorTemplate;
-
+import com.github.mikephil.charting.components.XAxis;
+import com.github.mikephil.charting.components.YAxis;
+import com.github.mikephil.charting.data.BarData;
+import com.github.mikephil.charting.data.BarDataSet;
+import com.github.mikephil.charting.data.BarEntry;
+import com.github.mikephil.charting.formatter.ValueFormatter;
+import com.github.mikephil.charting.utils.ColorTemplate;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
-// import java.util.stream.Collectors; // Can be used for mapping if preferred
+import java.util.Locale;
 
 public class HomeFragment extends Fragment {
 
@@ -78,16 +81,14 @@ public class HomeFragment extends Fragment {
 
         setupRecyclerView();
         loadAndDisplayLogEntries();
-        // loadChartData(); // Uncomment and implement if you have chart loading logic
+        setupHourlyEventsChart();
+        setupMonthlyEventsChart();
 
         fabAddLogEntry.setOnClickListener(v -> showAddLogEntryDialog());
 
-        // Refresh data when fragment becomes visible again, e.g., after adding event types in settings
-        // and returning to this fragment.
         AppDatabase.databaseWriteExecutor.execute(() -> {
             availableEventTypes = eventTypeDao.getAllEventTypes();
         });
-
 
         return view;
     }
@@ -95,20 +96,19 @@ public class HomeFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        // Refresh log entries and potentially event types if settings were changed
         loadAndDisplayLogEntries();
-        // Fetch event types again in case they were modified in Settings
+        setupHourlyEventsChart();
+        setupMonthlyEventsChart();
         AppDatabase.databaseWriteExecutor.execute(() -> {
             availableEventTypes = eventTypeDao.getAllEventTypes();
         });
     }
 
-
     private void setupRecyclerView() {
         if (recyclerViewLogEntries == null) return;
         recyclerViewLogEntries.setLayoutManager(new LinearLayoutManager(getContext()));
-// Corrected line for HomeFragment.java
-        logEntryAdapter = new LogEntryAdapter(new ArrayList<>());        recyclerViewLogEntries.setAdapter(logEntryAdapter);
+        logEntryAdapter = new LogEntryAdapter(new ArrayList<>());
+        recyclerViewLogEntries.setAdapter(logEntryAdapter);
     }
 
     private void loadAndDisplayLogEntries() {
@@ -128,12 +128,12 @@ public class HomeFragment extends Fragment {
         }
 
         AppDatabase.databaseWriteExecutor.execute(() -> {
-            List<LogEntry> logEntries = logEntryDao.getRecentLogEntries(5);
+            List<LogEntry> logEntries = logEntryDao.getRecentLogEntries(5); // Still fetches 5 for the list
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     if (logEntries != null && !logEntries.isEmpty()) {
-                        logEntryAdapter.setLogEntries(logEntries); // Make sure LogEntryAdapter has setLogEntries
+                        logEntryAdapter.setLogEntries(logEntries);
                         if (recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.VISIBLE);
                         if (textViewNoEntries != null) textViewNoEntries.setVisibility(View.GONE);
                     } else {
@@ -149,7 +149,175 @@ public class HomeFragment extends Fragment {
         });
     }
 
-    // private void loadChartData() { /* Your chart loading logic here */ }
+    private void setupHourlyEventsChart() {
+        AppDatabase.databaseWriteExecutor.execute(() -> {
+            List<LogEntry> entries = db.logEntryDao().getAllLogEntries(); // Charts use all entries
+            if (getActivity() == null || barChartHourlyEvents == null) return;
+
+            getActivity().runOnUiThread(() -> {
+                if (entries == null || entries.isEmpty()) {
+                    barChartHourlyEvents.clear();
+                    barChartHourlyEvents.invalidate(); // Refresh the chart to show it's empty
+                    return;
+                }
+
+                int[] hourlyCounts = new int[24]; // For 24 hours
+                Calendar calendar = Calendar.getInstance();
+
+                for (LogEntry entry : entries) {
+                    calendar.setTimeInMillis(entry.getTimestamp());
+                    int hourOfDay = calendar.get(Calendar.HOUR_OF_DAY);
+                    if (hourOfDay >= 0 && hourOfDay < 24) {
+                        hourlyCounts[hourOfDay]++;
+                    }
+                }
+
+                ArrayList<BarEntry> barEntries = new ArrayList<>();
+                for (int i = 0; i < 24; i++) {
+                    barEntries.add(new BarEntry(i, hourlyCounts[i]));
+                }
+
+                BarDataSet dataSet = new BarDataSet(barEntries, "Events per Hour");
+                dataSet.setColors(ColorTemplate.MATERIAL_COLORS);
+                dataSet.setValueTextColor(Color.BLACK); // Or use a theme color
+                dataSet.setValueTextSize(10f);
+                dataSet.setValueFormatter(new ValueFormatter() {
+                    @Override
+                    public String getFormattedValue(float value) {
+                        if (value == 0) {
+                            return ""; // Don't show zero values
+                        }
+                        return String.valueOf((int) value);
+                    }
+                });
+
+                BarData barData = new BarData(dataSet);
+                barData.setBarWidth(0.9f);
+
+                barChartHourlyEvents.getDescription().setEnabled(false);
+                barChartHourlyEvents.setDrawGridBackground(false);
+                barChartHourlyEvents.setFitBars(true);
+                barChartHourlyEvents.setData(barData);
+                barChartHourlyEvents.setDrawBorders(false);
+                barChartHourlyEvents.getLegend().setEnabled(false); // Hide legend
+
+                XAxis xAxis = barChartHourlyEvents.getXAxis();
+                xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+                xAxis.setGranularity(1f);
+                xAxis.setLabelCount(24, false); // Show all 24 hour labels if possible
+                xAxis.setValueFormatter(new ValueFormatter() {
+                    @Override
+                    public String getFormattedValue(float value) {
+                        return String.valueOf((int) value); // Display hour number
+                    }
+                });
+                xAxis.setDrawGridLines(false); // No vertical grid lines
+
+                YAxis leftAxis = barChartHourlyEvents.getAxisLeft();
+                leftAxis.setAxisMinimum(0f); // Start Y-axis at 0
+                leftAxis.setGranularity(1f); // Steps of 1
+                leftAxis.setGranularityEnabled(true);
+                leftAxis.setValueFormatter(new ValueFormatter() {
+                     @Override
+                     public String getFormattedValue(float value) {
+                        return String.valueOf((int) value);
+                    }
+                });
+                leftAxis.setDrawGridLines(false); // No horizontal grid lines
+
+                barChartHourlyEvents.getAxisRight().setEnabled(false); // No right Y-axis
+                barChartHourlyEvents.animateY(1000); // Animation
+                barChartHourlyEvents.invalidate(); // Refresh chart
+            });
+        });
+    }
+
+    private void setupMonthlyEventsChart() {
+        AppDatabase.databaseWriteExecutor.execute(() -> {
+            List<LogEntry> entries = db.logEntryDao().getAllLogEntries(); // Charts use all entries
+            if (getActivity() == null || barChartMonthlyEvents == null) return;
+
+            getActivity().runOnUiThread(() -> {
+                if (entries == null || entries.isEmpty()) {
+                    barChartMonthlyEvents.clear();
+                    barChartMonthlyEvents.invalidate();
+                    return;
+                }
+
+                int[] monthlyCounts = new int[12]; // For 12 months
+                Calendar calendar = Calendar.getInstance();
+
+                for (LogEntry entry : entries) {
+                    calendar.setTimeInMillis(entry.getTimestamp());
+                    int month = calendar.get(Calendar.MONTH); // 0 (Jan) to 11 (Dec)
+                    if (month >= 0 && month < 12) {
+                        monthlyCounts[month]++;
+                    }
+                }
+
+                ArrayList<BarEntry> barEntries = new ArrayList<>();
+                for (int i = 0; i < 12; i++) {
+                    barEntries.add(new BarEntry(i, monthlyCounts[i]));
+                }
+
+                BarDataSet dataSet = new BarDataSet(barEntries, "Events per Month");
+                dataSet.setColors(ColorTemplate.PASTEL_COLORS);
+                dataSet.setValueTextColor(Color.BLACK);
+                dataSet.setValueTextSize(10f);
+                dataSet.setValueFormatter(new ValueFormatter() {
+                    @Override
+                    public String getFormattedValue(float value) {
+                        if (value == 0) {
+                            return "";
+                        }
+                        return String.valueOf((int) value);
+                    }
+                });
+
+                BarData barData = new BarData(dataSet);
+                barData.setBarWidth(0.9f);
+
+                barChartMonthlyEvents.getDescription().setEnabled(false);
+                barChartMonthlyEvents.setDrawGridBackground(false);
+                barChartMonthlyEvents.setFitBars(true);
+                barChartMonthlyEvents.setData(barData);
+                barChartMonthlyEvents.setDrawBorders(false);
+                barChartMonthlyEvents.getLegend().setEnabled(false);
+
+                XAxis xAxis = barChartMonthlyEvents.getXAxis();
+                xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+                xAxis.setGranularity(1f);
+                xAxis.setLabelCount(12, false);
+                xAxis.setValueFormatter(new ValueFormatter() {
+                    @Override
+                    public String getFormattedValue(float value) {
+                        // To display month names e.g., Jan, Feb, Mar
+                        // Calendar cal = Calendar.getInstance();
+                        // cal.set(Calendar.MONTH, (int) value);
+                        // return new SimpleDateFormat("MMM", Locale.getDefault()).format(cal.getTime());
+                        return String.valueOf((int) value + 1); // Display 1-12 for months
+                    }
+                });
+                xAxis.setDrawGridLines(false);
+
+                YAxis leftAxis = barChartMonthlyEvents.getAxisLeft();
+                leftAxis.setAxisMinimum(0f);
+                leftAxis.setGranularity(1f);
+                leftAxis.setGranularityEnabled(true);
+                 leftAxis.setValueFormatter(new ValueFormatter() {
+                     @Override
+                     public String getFormattedValue(float value) {
+                        return String.valueOf((int) value);
+                    }
+                });
+                leftAxis.setDrawGridLines(false);
+
+                barChartMonthlyEvents.getAxisRight().setEnabled(false);
+                barChartMonthlyEvents.animateY(1000);
+                barChartMonthlyEvents.invalidate();
+            });
+        });
+    }
 
     private void showAddLogEntryDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
@@ -160,8 +328,6 @@ public class HomeFragment extends Fragment {
         Spinner spinnerEventType = dialogView.findViewById(R.id.spinner_event_type);
         TextInputEditText editTextNotes = dialogView.findViewById(R.id.edit_text_notes);
 
-        // Populate Spinner using the cached availableEventTypes
-        // This list is updated in onResume and initially in onCreateView's background thread
         List<String> eventTypeNames = new ArrayList<>();
         if (availableEventTypes != null) {
             for (EventType type : availableEventTypes) {
@@ -176,10 +342,9 @@ public class HomeFragment extends Fragment {
 
         if (eventTypeNames.isEmpty()) {
             Toast.makeText(getContext(), "No event types defined. Please add some in Settings.", Toast.LENGTH_LONG).show();
-            // Optionally, you could disable the "Add Entry" button or even prevent dialog from showing fully.
         }
 
-        builder.setPositiveButton("Add Entry", null); // Set later for validation if needed
+        builder.setPositiveButton("Add Entry", null);
         builder.setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss());
 
         AlertDialog dialog = builder.create();
@@ -187,7 +352,7 @@ public class HomeFragment extends Fragment {
         dialog.setOnShowListener(d -> {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
                 int selectedPosition = spinnerEventType.getSelectedItemPosition();
-                String notes = editTextNotes.getText().toString().trim();
+                String notes = editTextNotes.getText() != null ? editTextNotes.getText().toString().trim() : "";
 
                 if (availableEventTypes == null || availableEventTypes.isEmpty() || selectedPosition == Spinner.INVALID_POSITION) {
                     if (availableEventTypes == null || availableEventTypes.isEmpty()) {
@@ -203,13 +368,17 @@ public class HomeFragment extends Fragment {
                 LogEntry newLogEntry = new LogEntry();
                 newLogEntry.setTimestamp(new Date().getTime());
                 newLogEntry.setEventTypeId(selectedEventType.getEventTypeId());
-                newLogEntry.setEvent(selectedEventType.getEventName());
+                newLogEntry.setEvent(selectedEventType.getEventName()); // Storing the name for direct use if needed
                 newLogEntry.setNotes(notes);
 
                 AppDatabase.databaseWriteExecutor.execute(() -> {
                     logEntryDao.insert(newLogEntry);
                     if (getActivity() != null) {
-                        getActivity().runOnUiThread(this::loadAndDisplayLogEntries);
+                        getActivity().runOnUiThread(() -> {
+                            loadAndDisplayLogEntries(); // Refresh the list
+                            setupHourlyEventsChart();   // Refresh hourly chart
+                            setupMonthlyEventsChart();  // Refresh monthly chart
+                        });
                     }
                 });
                 dialog.dismiss();
