@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 public class EventTypeAdapter extends ListAdapter<EventType, EventTypeAdapter.EventTypeViewHolder> {
 
     private OnItemInteractionListener listener;
+    private static final int DEFAULT_EVENT_TYPE_ID = 1; // Assuming 'Default Event' created by callback gets ID 1
 
     public EventTypeAdapter() {
         super(DIFF_CALLBACK);
@@ -43,6 +44,15 @@ public class EventTypeAdapter extends ListAdapter<EventType, EventTypeAdapter.Ev
     public void onBindViewHolder(@NonNull EventTypeViewHolder holder, int position) {
         EventType currentEventType = getItem(position);
         holder.textViewName.setText(currentEventType.getEventName());
+
+        // For the default event type (ID 1), allow editing but hide the delete button.
+        if (currentEventType.getEventTypeId() == DEFAULT_EVENT_TYPE_ID) {
+            holder.buttonEdit.setVisibility(View.VISIBLE); // Edit button is VISIBLE
+            holder.buttonDelete.setVisibility(View.GONE);   // Delete button is GONE
+        } else {
+            holder.buttonEdit.setVisibility(View.VISIBLE);
+            holder.buttonDelete.setVisibility(View.VISIBLE);
+        }
     }
 
     public EventType getEventTypeAt(int position) {
@@ -51,8 +61,8 @@ public class EventTypeAdapter extends ListAdapter<EventType, EventTypeAdapter.Ev
 
     class EventTypeViewHolder extends RecyclerView.ViewHolder {
         private TextView textViewName;
-        private ImageButton buttonEdit;
-        private ImageButton buttonDelete;
+        ImageButton buttonEdit;
+        ImageButton buttonDelete;
 
         public EventTypeViewHolder(@NonNull View itemView) {
             super(itemView);

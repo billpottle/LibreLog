@@ -7,15 +7,13 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
-import android.widget.TextView; // Make sure this is imported
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider; // If you were using ViewModel, but direct DB access for now
-import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -28,7 +26,6 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
-
 import java.util.List;
 
 public class SettingsFragment extends Fragment {
@@ -38,6 +35,8 @@ public class SettingsFragment extends Fragment {
     private RecyclerView recyclerViewEventTypes;
     private TextView textViewNoEventTypes;
     private AppDatabase db;
+
+    private static final int DEFAULT_EVENT_TYPE_ID = 1; // Assuming 'Default Event' created by callback gets ID 1
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -66,6 +65,7 @@ public class SettingsFragment extends Fragment {
         adapter.setOnItemInteractionListener(new EventTypeAdapter.OnItemInteractionListener() {
             @Override
             public void onEditClick(EventType eventType) {
+                // Allow editing for all, including the default one
                 showAddEditEventTypeDialog(eventType);
             }
 
@@ -109,10 +109,10 @@ public class SettingsFragment extends Fragment {
         if (eventTypeToEdit != null) {
             dialogTitle.setText("Edit Event Type");
             editTextEventTypeName.setText(eventTypeToEdit.getEventName());
-            builder.setPositiveButton("Save Changes", null); // Set later for validation
+            builder.setPositiveButton("Save Changes", null);
         } else {
             dialogTitle.setText("Add New Event Type");
-            builder.setPositiveButton("Add", null); // Set later for validation
+            builder.setPositiveButton("Add", null);
         }
         builder.setNegativeButton("Cancel", (dialog, which) -> dialog.dismiss());
 
@@ -120,48 +120,50 @@ public class SettingsFragment extends Fragment {
 
         dialog.setOnShowListener(d -> {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                String eventName = editTextEventTypeName.getText().toString().trim();
-                if (TextUtils.isEmpty(eventName)) {
+                String newEventName = editTextEventTypeName.getText().toString().trim();
+                if (TextUtils.isEmpty(newEventName)) {
                     textInputLayoutEventName.setError("Event type name cannot be empty.");
                     return;
                 } else {
-                    textInputLayoutEventName.setError(null); // Clear error
+                    textInputLayoutEventName.setError(null);
                 }
 
                 AppDatabase.databaseWriteExecutor.execute(() -> {
-                    // Check for uniqueness before inserting/updating if the name changed
-                    EventType existing = eventTypeDao.findByName(eventName);
-                    boolean isUnique = true;
-                    if (existing != null) {
-                        if (eventTypeToEdit == null) { // Adding new, name already exists
-                            isUnique = false;
-                        } else if (eventTypeToEdit.getEventTypeId() != existing.getEventTypeId()) { // Editing, name changed to another existing name
-                            isUnique = false;
+                    EventType existingByName = eventTypeDao.findByName(newEventName);
+                    boolean isUniqueOrSameItem = true;
+
+                    if (existingByName != null) {
+                        if (eventTypeToEdit == null) { // Adding new
+                            isUniqueOrSameItem = false;
+                        } else { // Editing existing
+                            if (eventTypeToEdit.getEventTypeId() != existingByName.getEventTypeId()) {
+                                // Name matches another existing item's name that is not itself
+                                isUniqueOrSameItem = false;
+                            }
                         }
                     }
 
-                    if (!isUnique) {
+                    if (!isUniqueOrSameItem) {
                         if (getActivity() != null) {
                             getActivity().runOnUiThread(() -> {
                                 textInputLayoutEventName.setError("This event type name already exists.");
                                 Toast.makeText(getContext(), "Event type name already exists.", Toast.LENGTH_SHORT).show();
                             });
                         }
-                        return; // Stop execution
+                        return;
                     }
 
-                    // Proceed with insert or update
                     if (eventTypeToEdit != null) {
-                        eventTypeToEdit.setEventName(eventName);
+                        eventTypeToEdit.setEventName(newEventName);
                         eventTypeDao.update(eventTypeToEdit);
                     } else {
-                        EventType newEventType = new EventType(eventName);
+                        EventType newEventType = new EventType(newEventName);
                         eventTypeDao.insert(newEventType);
                     }
 
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
-                            loadEventTypes(); // Refresh list
+                            loadEventTypes();
                             dialog.dismiss();
                             String message = eventTypeToEdit == null ? "Event type added." : "Event type updated.";
                             Toast.makeText(getContext(), message, Toast.LENGTH_SHORT).show();
@@ -173,11 +175,20 @@ public class SettingsFragment extends Fragment {
         dialog.show();
     }
 
-
     private void confirmDeleteEventType(EventType eventType) {
+        // Prevent deletion if the event type ID is the default one.
+        if (eventType.getEventTypeId() == DEFAULT_EVENT_TYPE_ID) {
+            Toast.makeText(getContext(), "'" + eventType.getEventName() + "' is the default event type and cannot be deleted.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        String message = "Are you sure you want to delete \"" + eventType.getEventName() + "\"? " +
+                "All log entries associated with this event type will have their event type cleared (set to null). " +
+                "This action cannot be undone. Consider exporting your data first if you want to keep a record.";
+
         new AlertDialog.Builder(requireContext())
                 .setTitle("Delete Event Type")
-                .setMessage("Are you sure you want to delete \"" + eventType.getEventName() + "\"? This cannot be undone.")
+                .setMessage(message)
                 .setPositiveButton("Delete", (dialog, which) -> {
                     AppDatabase.databaseWriteExecutor.execute(() -> {
                         eventTypeDao.delete(eventType);
