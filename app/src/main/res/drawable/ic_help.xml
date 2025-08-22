@@ -1,5 +1,37 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" android:height="24dp" android:tint="#000000" android:viewportHeight="960" android:viewportWidth="960" android:width="24dp">
-      
-    <path android:fillColor="@android:color/white" android:pathData="M580,840Q530,840 495,805Q460,770 460,720Q460,670 495,635Q530,600 580,600Q630,600 665,635Q700,670 700,720Q700,770 665,805Q630,840 580,840ZM580,760Q597,760 608.5,748.5Q620,737 620,720Q620,703 608.5,691.5Q597,680 580,680Q563,680 551.5,691.5Q540,703 540,720Q540,737 551.5,748.5Q563,760 580,760ZM660,560Q568,560 504,496Q440,432 440,340Q440,248 504,184Q568,120 660,120Q752,120 816,184Q880,248 880,340Q880,432 816,496Q752,560 660,560ZM660,480Q719,480 759.5,439.5Q800,399 800,340Q800,281 759.5,240.5Q719,200 660,200Q601,200 560.5,240.5Q520,281 520,340Q520,399 560.5,439.5Q601,480 660,480ZM280,720Q214,720 167,673Q120,626 120,560Q120,494 167,447Q214,400 280,400Q346,400 393,447Q440,494 440,560Q440,626 393,673Q346,720 280,720ZM280,640Q313,640 336.5,616.5Q360,593 360,560Q360,527 336.5,503.5Q313,480 280,480Q247,480 223.5,503.5Q200,527 200,560Q200,593 223.5,616.5Q247,640 280,640ZM580,720Q580,720 580,720Q580,720 580,720Q580,720 580,720Q580,720 580,720Q580,720 580,720Q580,720 580,720Q580,720 580,720Q580,720 580,720ZM660,340Q660,340 660,340Q660,340 660,340Q660,340 660,340Q660,340 660,340Q660,340 660,340Q660,340 660,340Q660,340 660,340Q660,340 660,340ZM280,560Q280,560 280,560Q280,560 280,560Q280,560 280,560Q280,560 280,560Q280,560 280,560Q280,560 280,560Q280,560 280,560Q280,560 280,560Z"/>
-    
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ * Copyright (c) 2016, The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M0 0h24v24H0z" />
+    <path
+        android:fillColor="#ffffff"
+        android:pathData="M19.43 12.98c.04-.32 .07 -.64 .07 -.98s-.03-.66-.07-.98l2.11-1.65c.19-.15 .24
+-.42 .12 -.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49
+1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46 .18
+-.49 .42 l-.38 2.65c-.61 .25 -1.17 .59 -1.69 .98 l-2.49-1c-.23-.09-.49 0-.61 .22
+l-2 3.46c-.13 .22 -.07 .49 .12 .64 l2.11 1.65c-.04 .32 -.07 .65 -.07 .98 s.03
+.66 .07 .98 l-2.11 1.65c-.19 .15 -.24 .42 -.12 .64 l2 3.46c.12 .22 .39 .3 .61
+.22 l2.49-1c.52 .4 1.08 .73 1.69 .98 l.38 2.65c.03 .24 .24 .42 .49 .42 h4c.25 0
+.46-.18 .49 -.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23 .09 .49 0
+.61-.22l2-3.46c.12-.22 .07 -.49-.12-.64l-2.11-1.65zM12 15.5c-1.93
+0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z" />
 </vector>

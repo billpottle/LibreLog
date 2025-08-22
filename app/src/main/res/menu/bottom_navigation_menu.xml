@@ -10,7 +10,7 @@
     <item
         android:id="@+id/navigation_output"
         android:icon="@drawable/ic_output"
-        android:title="@string/title_output" />
+        android:title="@string/title_export" />
     <item
         android:id="@+id/navigation_help"
         android:icon="@drawable/ic_help"
