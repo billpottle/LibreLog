@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
+import android.widget.Button;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -59,12 +60,22 @@ public class HomeFragment extends Fragment {
     private AppDatabase db;
 
     private BarChart barChartHourlyEvents;
-    private BarChart barChartDailyEvents; // Renamed from barChartMonthlyEvents for clarity with DAO
+    private BarChart barChartDailyEvents;
     private AutoCompleteTextView dropdownEventTypesAutocomplete;
 
     private List<EventType> availableEventTypes = new ArrayList<>();
     private Map<String, Long> eventTypeNameToIdMap = new HashMap<>();
-    private long selectedEventTypeId = 1L; // Default to Event Type ID 1
+    private long selectedEventTypeId = 1L;
+
+    // Pagination for Recent Events
+    private static final int ITEMS_PER_PAGE = 5;
+    private int currentPage = 1;
+    private int totalPages = 0;
+    private long totalItems = 0;
+    private Button buttonPreviousPage;
+    private Button buttonNextPage;
+    private TextView textViewPageInfo;
+
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -84,25 +95,48 @@ public class HomeFragment extends Fragment {
         fabAddLogEntry = view.findViewById(R.id.fab_add_log_entry);
 
         barChartHourlyEvents = view.findViewById(R.id.bar_chart_hourly_events);
-        barChartDailyEvents = view.findViewById(R.id.bar_chart_monthly_events); // Assuming this is the correct ID from your XML
+        barChartDailyEvents = view.findViewById(R.id.bar_chart_monthly_events);
         dropdownEventTypesAutocomplete = view.findViewById(R.id.dropdown_event_types_autocomplete);
 
+        // Pagination UI
+        buttonPreviousPage = view.findViewById(R.id.button_previous_page);
+        buttonNextPage = view.findViewById(R.id.button_next_page);
+        textViewPageInfo = view.findViewById(R.id.text_view_page_info);
+
         setupRecyclerView();
+        setupPaginationListeners();
         fabAddLogEntry.setOnClickListener(v -> showAddLogEntryDialog());
-        
-        fetchEventTypesAndSetupDropdown(); // This will also trigger initial data load
+
+        fetchEventTypesAndSetupDropdown();
 
         return view;
     }
 
+    private void setupPaginationListeners() {
+        if (buttonPreviousPage != null) {
+            buttonPreviousPage.setOnClickListener(v -> {
+                if (currentPage > 1) {
+                    currentPage--;
+                    loadLogEntriesForCurrentPage();
+                }
+            });
+        }
+        if (buttonNextPage != null) {
+            buttonNextPage.setOnClickListener(v -> {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    loadLogEntriesForCurrentPage();
+                }
+            });
+        }
+    }
+
+
     @Override
     public void onResume() {
         super.onResume();
-        // Data is now loaded/refreshed via fetchEventTypesAndSetupDropdown or dropdown selection
-        // If event types haven't changed, but data might have, you could add a direct refresh here:
-        // refreshAllEventData(); 
-        // However, fetchEventTypesAndSetupDropdown in onResume already triggers refreshAllEventData
-        // if event types are loaded.
+        // Refresh data if needed, fetchEventTypesAndSetupDropdown handles initial load.
+        // If coming back to the fragment and data might be stale, consider an explicit refresh.
     }
 
     private void fetchEventTypesAndSetupDropdown() {
@@ -118,7 +152,7 @@ public class HomeFragment extends Fragment {
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     setupEventTypeDropdown();
-                    refreshAllEventData(); // Load data with default or current selectedEventTypeId
+                    refreshAllDataAndResetPage(); // This will load data for the selected type and page 1
                 });
             }
         });
@@ -137,7 +171,6 @@ public class HomeFragment extends Fragment {
                 android.R.layout.simple_dropdown_item_1line, eventTypeNames);
         dropdownEventTypesAutocomplete.setAdapter(adapter);
 
-        // Set initial text for the dropdown based on selectedEventTypeId
         String initialDropdownText = "";
         Optional<EventType> defaultEventType = availableEventTypes.stream()
                 .filter(et -> et.getEventTypeId() == selectedEventTypeId)
@@ -146,19 +179,16 @@ public class HomeFragment extends Fragment {
         if (defaultEventType.isPresent()) {
             initialDropdownText = defaultEventType.get().getEventName();
         } else if (!eventTypeNames.isEmpty()) {
-            // Fallback to the first available if ID 1 doesn't exist or isn't in the list
-            // and update selectedEventTypeId accordingly
             initialDropdownText = eventTypeNames.get(0);
             selectedEventTypeId = eventTypeNameToIdMap.getOrDefault(initialDropdownText, -1L);
         }
-        
-        dropdownEventTypesAutocomplete.setText(initialDropdownText, false);
 
+        dropdownEventTypesAutocomplete.setText(initialDropdownText, false);
 
         if (eventTypeNames.isEmpty()) {
             dropdownEventTypesAutocomplete.setHint("No event types defined");
         } else {
-             dropdownEventTypesAutocomplete.setHint("Select Event Type");
+            dropdownEventTypesAutocomplete.setHint("Select Event Type");
         }
 
         dropdownEventTypesAutocomplete.setOnItemClickListener((parent, view, position, id) -> {
@@ -167,54 +197,120 @@ public class HomeFragment extends Fragment {
 
             if (newSelectedId != -1L && newSelectedId != selectedEventTypeId) {
                 selectedEventTypeId = newSelectedId;
-                refreshAllEventData();
+                refreshAllDataAndResetPage();
             } else if (newSelectedId == -1L) {
                 Toast.makeText(getContext(), "Could not find ID for selected event type.", Toast.LENGTH_SHORT).show();
             }
         });
     }
-    
+
+    private void refreshAllDataAndResetPage() {
+        currentPage = 1; // Reset to first page when event type changes or on initial full refresh
+        refreshAllEventData();
+    }
+
     private void refreshAllEventData() {
         if (selectedEventTypeId == -1L && !eventTypeNameToIdMap.isEmpty()) {
-             // If selected ID is somehow invalid but we have types, try to pick the first one.
-             Optional<String> firstName = eventTypeNameToIdMap.keySet().stream().findFirst();
-             if(firstName.isPresent()){
-                 selectedEventTypeId = eventTypeNameToIdMap.get(firstName.get());
-             } else {
-                 // No event types available to select
-                 if (getActivity() != null) {
+            Optional<String> firstName = eventTypeNameToIdMap.keySet().stream().findFirst();
+            if(firstName.isPresent()){
+                selectedEventTypeId = eventTypeNameToIdMap.get(firstName.get());
+            } else {
+                if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         clearAllUIData();
                         Toast.makeText(getContext(), "No event types available to filter by.", Toast.LENGTH_LONG).show();
                     });
                 }
                 return;
-             }
+            }
         } else if (eventTypeNameToIdMap.isEmpty()) {
-            // No event types at all
             if (getActivity() != null) {
                 getActivity().runOnUiThread(this::clearAllUIData);
             }
             return;
         }
 
-
         AppDatabase.databaseWriteExecutor.execute(() -> {
-            // Ensure DAO methods are called with the currently selectedEventTypeId
-            List<LogEntry> recentLogEntries = logEntryDao.getRecentLogEntries(selectedEventTypeId, 5);
+            // Fetch total items for pagination for recent events
+            totalItems = logEntryDao.getCountLogEntries(selectedEventTypeId);
+            totalPages = (int) Math.ceil((double) totalItems / ITEMS_PER_PAGE);
+            if (totalPages == 0) totalPages = 1; // Ensure at least 1 page even if no items
+
+            // Adjust currentPage if it's out of new bounds
+            if (currentPage > totalPages) {
+                currentPage = totalPages;
+            }
+            if (currentPage < 1) {
+                currentPage = 1;
+            }
+
+            int offset = (currentPage - 1) * ITEMS_PER_PAGE;
+            List<LogEntry> recentLogEntries = logEntryDao.getRecentLogEntries(selectedEventTypeId, ITEMS_PER_PAGE, offset);
+
             List<LogEntryDao.EventCountByHour> hourlyData = logEntryDao.getEventCountByHour(selectedEventTypeId);
             List<LogEntryDao.EventCountByDay> dailyData = logEntryDao.getEventCountByDay(selectedEventTypeId);
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     updateRecentEventsUI(recentLogEntries);
+                    updatePaginationControls();
                     updateHourlyEventsChart(hourlyData);
-                    updateDailyEventsChart(dailyData); // Renamed from setupMonthlyEventsChart
+                    updateDailyEventsChart(dailyData);
                 });
             }
         });
     }
-    
+
+    private void loadLogEntriesForCurrentPage() {
+        if (selectedEventTypeId == -1L) {
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    clearAllUIData(); // Or at least clear recent events part
+                    Toast.makeText(getContext(), "Please select an event type.", Toast.LENGTH_SHORT).show();
+                });
+            }
+            return;
+        }
+        AppDatabase.databaseWriteExecutor.execute(() -> {
+            int offset = (currentPage - 1) * ITEMS_PER_PAGE;
+            List<LogEntry> recentLogEntries = logEntryDao.getRecentLogEntries(selectedEventTypeId, ITEMS_PER_PAGE, offset);
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    updateRecentEventsUI(recentLogEntries);
+                    updatePaginationControls();
+                });
+            }
+        });
+    }
+
+    private void updatePaginationControls() {
+        if (textViewPageInfo != null) {
+            if (totalItems == 0) {
+                textViewPageInfo.setText("No entries");
+            } else {
+                textViewPageInfo.setText(String.format(Locale.US, "Page %d of %d", currentPage, totalPages));
+            }
+        }
+        if (buttonPreviousPage != null) {
+            buttonPreviousPage.setEnabled(currentPage > 1);
+        }
+        if (buttonNextPage != null) {
+            buttonNextPage.setEnabled(currentPage < totalPages);
+        }
+
+        // Hide pagination if there's only one page or no items.
+        boolean showPagination = totalPages > 1;
+        if (buttonPreviousPage != null) buttonPreviousPage.setVisibility(showPagination ? View.VISIBLE : View.GONE);
+        if (buttonNextPage != null) buttonNextPage.setVisibility(showPagination ? View.VISIBLE : View.GONE);
+        if (textViewPageInfo != null && totalItems == 0) { // If no items, even "Page 1 of 1" might be confusing.
+            if (textViewPageInfo != null) textViewPageInfo.setVisibility(View.VISIBLE); // Keep it visible for "No entries"
+        } else if (textViewPageInfo != null) {
+            textViewPageInfo.setVisibility(View.VISIBLE);
+        }
+
+
+    }
+
     private void clearAllUIData() {
         if (logEntryAdapter != null) logEntryAdapter.setLogEntries(new ArrayList<>());
         if (textViewNoEntries != null) {
@@ -230,8 +326,14 @@ public class HomeFragment extends Fragment {
             barChartDailyEvents.clear();
             barChartDailyEvents.invalidate();
         }
+        // Also clear pagination
+        currentPage = 1;
+        totalPages = 0;
+        totalItems = 0;
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(this::updatePaginationControls);
+        }
     }
-
 
     private void setupRecyclerView() {
         if (recyclerViewLogEntries == null) return;
@@ -240,7 +342,6 @@ public class HomeFragment extends Fragment {
         recyclerViewLogEntries.setAdapter(logEntryAdapter);
     }
 
-    // Updated to accept data as a parameter
     private void updateRecentEventsUI(List<LogEntry> logEntries) {
         if (logEntryAdapter == null) return;
 
@@ -249,16 +350,23 @@ public class HomeFragment extends Fragment {
             if (recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.VISIBLE);
             if (textViewNoEntries != null) textViewNoEntries.setVisibility(View.GONE);
         } else {
-            logEntryAdapter.setLogEntries(new ArrayList<>());
-            if (recyclerViewLogEntries != null) recyclerViewLogEntries.setVisibility(View.GONE);
-            if (textViewNoEntries != null) {
-                textViewNoEntries.setText("No recent log entries for this event type.");
-                textViewNoEntries.setVisibility(View.VISIBLE);
+            logEntryAdapter.setLogEntries(new ArrayList<>()); // Clear adapter
+            if (recyclerViewLogEntries != null && totalItems > 0) { // Still hide recycler if current page has no items but others might
+                recyclerViewLogEntries.setVisibility(View.GONE);
+                if(textViewNoEntries != null) {
+                    textViewNoEntries.setText("No entries on this page.");
+                    textViewNoEntries.setVisibility(View.VISIBLE);
+                }
+            } else if (recyclerViewLogEntries != null) { // No items at all for this filter
+                recyclerViewLogEntries.setVisibility(View.GONE);
+                if(textViewNoEntries != null) {
+                    textViewNoEntries.setText("No recent log entries for this event type.");
+                    textViewNoEntries.setVisibility(View.VISIBLE);
+                }
             }
         }
     }
 
-    // Updated to accept data as a parameter
     private void updateHourlyEventsChart(List<LogEntryDao.EventCountByHour> hourlyData) {
         if (barChartHourlyEvents == null) return;
 
@@ -270,8 +378,7 @@ public class HomeFragment extends Fragment {
         }
 
         ArrayList<BarEntry> barEntries = new ArrayList<>();
-        // Assuming EventCountByHour has 'hour' (String "00"-"23") and 'count' (int)
-        for (int i = 0; i < 24; i++) { // Ensure all hours are represented, even if count is 0
+        for (int i = 0; i < 24; i++) {
             String hourString = String.format(Locale.US, "%02d", i);
             int count = 0;
             for(LogEntryDao.EventCountByHour item : hourlyData){
@@ -282,7 +389,6 @@ public class HomeFragment extends Fragment {
             }
             barEntries.add(new BarEntry(i, count));
         }
-
 
         BarDataSet dataSet = new BarDataSet(barEntries, "Events per Hour");
         dataSet.setColors(ColorTemplate.MATERIAL_COLORS);
@@ -327,16 +433,15 @@ public class HomeFragment extends Fragment {
                 return String.valueOf((int) value);
             }
         });
-        leftAxis.setDrawGridLines(true); // Keep grid lines for Y-axis for better readability
+        leftAxis.setDrawGridLines(true);
 
         barChartHourlyEvents.getAxisRight().setEnabled(false);
         barChartHourlyEvents.animateY(1000);
         barChartHourlyEvents.invalidate();
     }
 
-    // Renamed from setupMonthlyEventsChart and updated to accept data
     private void updateDailyEventsChart(List<LogEntryDao.EventCountByDay> dailyData) {
-         if (barChartDailyEvents == null) return;
+        if (barChartDailyEvents == null) return;
 
         if (dailyData == null || dailyData.isEmpty()) {
             barChartDailyEvents.clear();
@@ -346,24 +451,20 @@ public class HomeFragment extends Fragment {
         }
 
         ArrayList<BarEntry> barEntries = new ArrayList<>();
-        // Assuming EventCountByDay has 'day' (String "01"-"31") and 'count' (int)
-        // For simplicity, let's assume we want to show up to 31 days.
-        // A more robust solution might use the actual days from the data or current month.
         Map<Integer, Integer> dayCountsMap = new HashMap<>();
         for (LogEntryDao.EventCountByDay item : dailyData) {
             try {
                 dayCountsMap.put(Integer.parseInt(item.day), item.count);
             } catch (NumberFormatException e) {
-                // Skip malformed day string
+                // Skip
             }
         }
-        
-        int maxDay = Calendar.getInstance().getActualMaximum(Calendar.DAY_OF_MONTH); // Days in current month
+
+        int maxDay = Calendar.getInstance().getActualMaximum(Calendar.DAY_OF_MONTH);
 
         for (int i = 1; i <= maxDay; i++) {
             barEntries.add(new BarEntry(i, dayCountsMap.getOrDefault(i, 0)));
         }
-
 
         BarDataSet dataSet = new BarDataSet(barEntries, "Events per Day");
         dataSet.setColors(ColorTemplate.PASTEL_COLORS);
@@ -389,11 +490,10 @@ public class HomeFragment extends Fragment {
         XAxis xAxis = barChartDailyEvents.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
         xAxis.setGranularity(1f);
-        //xAxis.setLabelCount(maxDay, false); // Adjust label count if needed
         xAxis.setValueFormatter(new ValueFormatter() {
             @Override
             public String getFormattedValue(float value) {
-                return String.valueOf((int) value); // Day number
+                return String.valueOf((int) value);
             }
         });
         xAxis.setDrawGridLines(false);
@@ -459,7 +559,7 @@ public class HomeFragment extends Fragment {
 
                 LogEntry newLogEntry = new LogEntry();
                 newLogEntry.setTimestamp(new Date().getTime());
-                newLogEntry.setEventTypeId(selectedEventTypeForDialog.getEventTypeId()); // This should be fine if EventType.eventTypeId is int
+                newLogEntry.setEventTypeId(selectedEventTypeForDialog.getEventTypeId());
                 newLogEntry.setEvent(selectedEventTypeForDialog.getEventName());
                 newLogEntry.setNotes(notes);
 
@@ -467,9 +567,9 @@ public class HomeFragment extends Fragment {
                     logEntryDao.insert(newLogEntry);
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
-                            // If the new entry's type matches the currently selected filter, refresh
-                            if (selectedEventTypeForDialog.getEventTypeId() == selectedEventTypeId) { // Direct comparison of int and long is fine here
-                                refreshAllEventData();
+                            // If the new entry's type matches the currently selected filter, refresh all data (including count for pagination)
+                            if (selectedEventTypeForDialog.getEventTypeId() == selectedEventTypeId) {
+                                refreshAllDataAndResetPage(); // This will re-query count and go to page 1
                             }
                             Toast.makeText(getContext(), "Log entry added.", Toast.LENGTH_SHORT).show();
                         });

@@ -104,8 +104,6 @@
                     app:layout_behavior="@string/appbar_scrolling_view_behavior"
                     tools:listitem="@layout/list_item_log_entry"
                     tools:itemCount="3"/>
-                <!-- android:nestedScrollingEnabled="false" might be needed if issues persist,
-                     but usually not required if RecyclerView is wrap_content and parent is NestedScrollView. -->
 
                 <TextView
                     android:id="@+id/text_view_no_entries"
@@ -117,6 +115,39 @@
                     android:visibility="gone"
                     tools:visibility="visible"/>
             </FrameLayout>
+
+            <!-- Pagination Controls -->
+            <LinearLayout
+                android:id="@+id/pagination_controls_recent_events"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <Button
+                    android:id="@+id/button_previous_page"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Previous"
+                    style="?android:attr/buttonBarButtonStyle" />
+
+                <TextView
+                    android:id="@+id/text_view_page_info"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="Page 1 of 1"
+                    android:textAppearance="?attr/textAppearanceListItemSecondary" />
+
+                <Button
+                    android:id="@+id/button_next_page"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Next"
+                    style="?android:attr/buttonBarButtonStyle" />
+            </LinearLayout>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
