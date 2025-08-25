@@ -5,6 +5,7 @@
     android:layout_height="match_parent"
     android:gravity="center_horizontal"
     android:orientation="vertical"
+    android:fitsSystemWindows="true"
     android:padding="16dp"
     tools:context=".ui.ImportFragment">
 
