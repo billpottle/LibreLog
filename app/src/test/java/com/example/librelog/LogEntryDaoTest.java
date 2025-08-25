@@ -39,14 +39,12 @@ public class LogEntryDaoTest {
         eventTypeDao = db.eventTypeDao();
 
         // Setup some event types
-        EventType type1 = new EventType();
+        EventType type1 = new EventType("Test Event Type 1");
         type1.setEventTypeId(1); // Assuming setEventTypeId takes int
-        type1.setEventName("Test Event Type 1");
         eventTypeDao.insert(type1);
 
-        EventType type2 = new EventType();
+        EventType type2 = new EventType("Test Event Type 2");
         type2.setEventTypeId(2);
-        type2.setEventName("Test Event Type 2");
         eventTypeDao.insert(type2);
     }
 
