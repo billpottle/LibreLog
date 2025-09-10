@@ -6,6 +6,8 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
+import io.github.billpottle.librelog.R;
+
 import com.example.librelog.ui.ImportFragment;
 import com.example.librelog.ui.SettingsFragment;
 import com.example.librelog.ui.HomeFragment;

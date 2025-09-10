@@ -11,6 +11,8 @@ import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.ListAdapter;
 import androidx.recyclerview.widget.RecyclerView;
 
+import io.github.billpottle.librelog.R;
+
 public class EventTypeAdapter extends ListAdapter<EventType, EventTypeAdapter.EventTypeViewHolder> {
 
     private OnItemInteractionListener listener;

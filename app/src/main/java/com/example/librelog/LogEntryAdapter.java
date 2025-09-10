@@ -8,6 +8,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import io.github.billpottle.librelog.R;
+
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
