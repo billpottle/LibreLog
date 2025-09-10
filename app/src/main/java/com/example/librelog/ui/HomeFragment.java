@@ -26,7 +26,7 @@ import com.example.librelog.EventTypeDao;
 import com.example.librelog.LogEntry;
 import com.example.librelog.LogEntryAdapter;
 import com.example.librelog.LogEntryDao;
-import com.example.librelog.R;
+import io.github.billpottle.librelog.R;
 import com.github.mikephil.charting.charts.BarChart;
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.components.YAxis;

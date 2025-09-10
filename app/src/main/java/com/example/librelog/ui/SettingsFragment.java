@@ -21,7 +21,7 @@ import com.example.librelog.AppDatabase;
 import com.example.librelog.EventType;
 import com.example.librelog.EventTypeAdapter;
 import com.example.librelog.EventTypeDao;
-import com.example.librelog.R;
+import io.github.billpottle.librelog.R;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;

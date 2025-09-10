@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.librelog"
+    namespace = "io.github.billpottle.librelog"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.librelog"
+        applicationId = "io.github.billpottle.librelog"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
@@ -17,6 +17,20 @@ android {
     }
 
     buildFeatures { viewBinding = true }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+        debug {
+            // keep defaults
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8

@@ -22,7 +22,7 @@ import androidx.fragment.app.Fragment;
 
 import com.example.librelog.AppDatabase;
 import com.example.librelog.LogEntry;
-import com.example.librelog.R;
+import io.github.billpottle.librelog.R;
 
 import java.io.BufferedReader;
 import java.io.IOException;
