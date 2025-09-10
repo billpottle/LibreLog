@@ -83,6 +83,21 @@
                 android:layout_marginTop="8dp"/>
 
             <TextView
+                android:id="@+id/text_title_month_of_year_chart"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="24dp"
+                android:text="Events by Month of Year"
+                android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
+
+            <com.github.mikephil.charting.charts.BarChart
+                android:id="@+id/bar_chart_month_of_year"
+                android:layout_width="match_parent"
+                android:layout_height="200dp"
+                android:layout_marginTop="8dp"/>
+
+            <TextView
                 android:id="@+id/text_title_recent_events"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

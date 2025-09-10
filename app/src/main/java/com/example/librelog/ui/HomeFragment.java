@@ -61,6 +61,7 @@ public class HomeFragment extends Fragment {
 
     private BarChart barChartHourlyEvents;
     private BarChart barChartDailyEvents;
+    private BarChart barChartMonthOfYearEvents;
     private AutoCompleteTextView dropdownEventTypesAutocomplete;
 
     private List<EventType> availableEventTypes = new ArrayList<>();
@@ -96,6 +97,7 @@ public class HomeFragment extends Fragment {
 
         barChartHourlyEvents = view.findViewById(R.id.bar_chart_hourly_events);
         barChartDailyEvents = view.findViewById(R.id.bar_chart_monthly_events);
+        barChartMonthOfYearEvents = view.findViewById(R.id.bar_chart_month_of_year);
         dropdownEventTypesAutocomplete = view.findViewById(R.id.dropdown_event_types_autocomplete);
 
         // Pagination UI
@@ -249,6 +251,7 @@ public class HomeFragment extends Fragment {
 
             List<LogEntryDao.EventCountByHour> hourlyData = logEntryDao.getEventCountByHour(selectedEventTypeId);
             List<LogEntryDao.EventCountByDay> dailyData = logEntryDao.getEventCountByDay(selectedEventTypeId);
+            List<LogEntryDao.EventCountByMonth> monthOfYearData = logEntryDao.getEventCountByMonthLast12(selectedEventTypeId);
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
@@ -256,6 +259,7 @@ public class HomeFragment extends Fragment {
                     updatePaginationControls();
                     updateHourlyEventsChart(hourlyData);
                     updateDailyEventsChart(dailyData);
+                    updateMonthOfYearEventsChart(monthOfYearData);
                 });
             }
         });
@@ -325,6 +329,10 @@ public class HomeFragment extends Fragment {
         if (barChartDailyEvents != null) {
             barChartDailyEvents.clear();
             barChartDailyEvents.invalidate();
+        }
+        if (barChartMonthOfYearEvents != null) {
+            barChartMonthOfYearEvents.clear();
+            barChartMonthOfYearEvents.invalidate();
         }
         // Also clear pagination
         currentPage = 1;
@@ -513,6 +521,80 @@ public class HomeFragment extends Fragment {
         barChartDailyEvents.getAxisRight().setEnabled(false);
         barChartDailyEvents.animateY(1000);
         barChartDailyEvents.invalidate();
+    }
+
+    private void updateMonthOfYearEventsChart(List<LogEntryDao.EventCountByMonth> monthData) {
+        if (barChartMonthOfYearEvents == null) return;
+
+        if (monthData == null || monthData.isEmpty()) {
+            barChartMonthOfYearEvents.clear();
+            barChartMonthOfYearEvents.setNoDataText("No monthly data for this event type.");
+            barChartMonthOfYearEvents.invalidate();
+            return;
+        }
+
+        ArrayList<BarEntry> barEntries = new ArrayList<>();
+        Map<Integer, Integer> monthCountsMap = new HashMap<>();
+        for (LogEntryDao.EventCountByMonth item : monthData) {
+            try {
+                monthCountsMap.put(Integer.parseInt(item.month), item.count);
+            } catch (NumberFormatException e) {
+                // Skip malformed month
+            }
+        }
+
+        for (int m = 1; m <= 12; m++) {
+            barEntries.add(new BarEntry(m, monthCountsMap.getOrDefault(m, 0)));
+        }
+
+        BarDataSet dataSet = new BarDataSet(barEntries, "Events per Month (Last 12 Months)");
+        dataSet.setColors(ColorTemplate.COLORFUL_COLORS);
+        dataSet.setValueTextColor(Color.BLACK);
+        dataSet.setValueTextSize(10f);
+        dataSet.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return value == 0 ? "" : String.valueOf((int) value);
+            }
+        });
+
+        BarData barData = new BarData(dataSet);
+        barData.setBarWidth(0.9f);
+
+        barChartMonthOfYearEvents.getDescription().setEnabled(false);
+        barChartMonthOfYearEvents.setDrawGridBackground(false);
+        barChartMonthOfYearEvents.setFitBars(true);
+        barChartMonthOfYearEvents.setData(barData);
+        barChartMonthOfYearEvents.setDrawBorders(false);
+        barChartMonthOfYearEvents.getLegend().setEnabled(false);
+
+        XAxis xAxis = barChartMonthOfYearEvents.getXAxis();
+        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+        xAxis.setGranularity(1f);
+        xAxis.setLabelCount(12, false);
+        xAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return String.valueOf((int) value);
+            }
+        });
+        xAxis.setDrawGridLines(false);
+
+        YAxis leftAxis = barChartMonthOfYearEvents.getAxisLeft();
+        leftAxis.setAxisMinimum(0f);
+        leftAxis.setGranularity(1f);
+        leftAxis.setGranularityEnabled(true);
+        leftAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return String.valueOf((int) value);
+            }
+        });
+        leftAxis.setDrawGridLines(true);
+
+        barChartMonthOfYearEvents.getAxisRight().setEnabled(false);
+        barChartMonthOfYearEvents.animateY(1000);
+        barChartMonthOfYearEvents.invalidate();
     }
 
     private void showAddLogEntryDialog() {
