@@ -62,6 +62,7 @@ public class HomeFragment extends Fragment {
     private BarChart barChartHourlyEvents;
     private BarChart barChartDailyEvents;
     private BarChart barChartMonthOfYearEvents;
+    private BarChart barChartTimeBetweenEvents;
     private AutoCompleteTextView dropdownEventTypesAutocomplete;
 
     private List<EventType> availableEventTypes = new ArrayList<>();
@@ -98,6 +99,7 @@ public class HomeFragment extends Fragment {
         barChartHourlyEvents = view.findViewById(R.id.bar_chart_hourly_events);
         barChartDailyEvents = view.findViewById(R.id.bar_chart_monthly_events);
         barChartMonthOfYearEvents = view.findViewById(R.id.bar_chart_month_of_year);
+        barChartTimeBetweenEvents = view.findViewById(R.id.bar_chart_time_between_events);
         dropdownEventTypesAutocomplete = view.findViewById(R.id.dropdown_event_types_autocomplete);
 
         // Pagination UI
@@ -252,6 +254,7 @@ public class HomeFragment extends Fragment {
             List<LogEntryDao.EventCountByHour> hourlyData = logEntryDao.getEventCountByHour(selectedEventTypeId);
             List<LogEntryDao.EventCountByDay> dailyData = logEntryDao.getEventCountByDay(selectedEventTypeId);
             List<LogEntryDao.EventCountByMonth> monthOfYearData = logEntryDao.getEventCountByMonthLast12(selectedEventTypeId);
+            List<Long> timestampsAsc = logEntryDao.getTimestampsForEventType(selectedEventTypeId);
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
@@ -260,6 +263,7 @@ public class HomeFragment extends Fragment {
                     updateHourlyEventsChart(hourlyData);
                     updateDailyEventsChart(dailyData);
                     updateMonthOfYearEventsChart(monthOfYearData);
+                    updateTimeBetweenEventsChart(timestampsAsc);
                 });
             }
         });
@@ -333,6 +337,10 @@ public class HomeFragment extends Fragment {
         if (barChartMonthOfYearEvents != null) {
             barChartMonthOfYearEvents.clear();
             barChartMonthOfYearEvents.invalidate();
+        }
+        if (barChartTimeBetweenEvents != null) {
+            barChartTimeBetweenEvents.clear();
+            barChartTimeBetweenEvents.invalidate();
         }
         // Also clear pagination
         currentPage = 1;
@@ -596,6 +604,178 @@ public class HomeFragment extends Fragment {
         barChartMonthOfYearEvents.animateY(1000);
         barChartMonthOfYearEvents.invalidate();
     }
+
+    private void updateTimeBetweenEventsChart(List<Long> timestampsAsc) {
+        if (barChartTimeBetweenEvents == null) return;
+
+        if (timestampsAsc == null || timestampsAsc.size() < 2) {
+            barChartTimeBetweenEvents.clear();
+            barChartTimeBetweenEvents.setNoDataText("Not enough data to compute intervals.");
+            barChartTimeBetweenEvents.invalidate();
+            return;
+        }
+
+        List<Long> deltas = new ArrayList<>();
+        for (int i = 1; i < timestampsAsc.size(); i++) {
+            long delta = timestampsAsc.get(i) - timestampsAsc.get(i - 1);
+            if (delta > 0) {
+                deltas.add(delta);
+            }
+        }
+
+        if (deltas.isEmpty()) {
+            barChartTimeBetweenEvents.clear();
+            barChartTimeBetweenEvents.setNoDataText("Not enough data to compute intervals.");
+            barChartTimeBetweenEvents.invalidate();
+            return;
+        }
+
+        long min = Long.MAX_VALUE;
+        long max = Long.MIN_VALUE;
+        for (long d : deltas) {
+            if (d < min) min = d;
+            if (d > max) max = d;
+        }
+
+        if (min == max) {
+            // All intervals equal: put them in the center bin
+            ArrayList<BarEntry> singleBin = new ArrayList<>();
+            singleBin.add(new BarEntry(1, deltas.size()));
+            BarDataSet singleSet = new BarDataSet(singleBin, "Time Between Events (8 bins)");
+            singleSet.setColors(ColorTemplate.MATERIAL_COLORS);
+            singleSet.setValueTextColor(Color.BLACK);
+            singleSet.setValueTextSize(10f);
+            singleSet.setValueFormatter(new ValueFormatter() {
+                @Override
+                public String getFormattedValue(float value) {
+                    return value == 0 ? "" : String.valueOf((int) value);
+                }
+            });
+            BarData sd = new BarData(singleSet);
+            sd.setBarWidth(0.9f);
+            barChartTimeBetweenEvents.getDescription().setEnabled(false);
+            barChartTimeBetweenEvents.setDrawGridBackground(false);
+            barChartTimeBetweenEvents.setFitBars(true);
+            barChartTimeBetweenEvents.setData(sd);
+            barChartTimeBetweenEvents.setDrawBorders(false);
+            barChartTimeBetweenEvents.getLegend().setEnabled(false);
+            XAxis x = barChartTimeBetweenEvents.getXAxis();
+            x.setPosition(XAxis.XAxisPosition.BOTTOM);
+            x.setGranularity(1f);
+            x.setLabelCount(1, true);
+            x.setValueFormatter(new ValueFormatter() {
+                @Override
+                public String getFormattedValue(float value) {
+                    return "All";
+                }
+            });
+            x.setDrawGridLines(false);
+            YAxis ly = barChartTimeBetweenEvents.getAxisLeft();
+            ly.setAxisMinimum(0f);
+            ly.setGranularity(1f);
+            ly.setGranularityEnabled(true);
+            ly.setValueFormatter(new ValueFormatter() {
+                @Override
+                public String getFormattedValue(float value) {
+                    return String.valueOf((int) value);
+                }
+            });
+            ly.setDrawGridLines(true);
+            barChartTimeBetweenEvents.getAxisRight().setEnabled(false);
+            barChartTimeBetweenEvents.animateY(800);
+            barChartTimeBetweenEvents.invalidate();
+            return;
+        }
+
+        // Create 8 even-width bins from 0..max (inclusive of max in last bin)
+        final int binCount = 8;
+        double binSize = (double) max / binCount;
+        int[] counts = new int[binCount];
+        for (long d : deltas) {
+            int idx;
+            if (d == max) {
+                idx = binCount - 1;
+            } else {
+                idx = (int) Math.floor(d / binSize);
+                if (idx < 0) idx = 0;
+                if (idx >= binCount) idx = binCount - 1;
+            }
+            counts[idx]++;
+        }
+
+        ArrayList<BarEntry> barEntries = new ArrayList<>();
+        for (int i = 0; i < binCount; i++) {
+            barEntries.add(new BarEntry(i + 1, counts[i]));
+        }
+
+        BarDataSet dataSet = new BarDataSet(barEntries, "Time Between Events (8 bins)");
+        dataSet.setColors(ColorTemplate.MATERIAL_COLORS);
+        dataSet.setValueTextColor(Color.BLACK);
+        dataSet.setValueTextSize(10f);
+        dataSet.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return value == 0 ? "" : String.valueOf((int) value);
+            }
+        });
+
+        BarData barData = new BarData(dataSet);
+        barData.setBarWidth(0.9f);
+
+        barChartTimeBetweenEvents.getDescription().setEnabled(false);
+        barChartTimeBetweenEvents.setDrawGridBackground(false);
+        barChartTimeBetweenEvents.setFitBars(true);
+        barChartTimeBetweenEvents.setData(barData);
+        barChartTimeBetweenEvents.setDrawBorders(false);
+        barChartTimeBetweenEvents.getLegend().setEnabled(false);
+
+        XAxis xAxis = barChartTimeBetweenEvents.getXAxis();
+        xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
+        xAxis.setGranularity(1f);
+        xAxis.setLabelCount(binCount, true);
+        final long maxBound = max;
+        final double binSizeConst = binSize;
+        xAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                int idx = (int) value - 1;
+                if (idx < 0 || idx >= binCount) return "";
+                double start = idx * binSizeConst;
+                double end = (idx == binCount - 1) ? maxBound : ((idx + 1) * binSizeConst);
+                return formatDuration((long) start) + "-" + formatDuration((long) end);
+            }
+        });
+        xAxis.setDrawGridLines(false);
+
+        YAxis leftAxis = barChartTimeBetweenEvents.getAxisLeft();
+        leftAxis.setAxisMinimum(0f);
+        leftAxis.setGranularity(1f);
+        leftAxis.setGranularityEnabled(true);
+        leftAxis.setValueFormatter(new ValueFormatter() {
+            @Override
+            public String getFormattedValue(float value) {
+                return String.valueOf((int) value);
+            }
+        });
+        leftAxis.setDrawGridLines(true);
+
+        barChartTimeBetweenEvents.getAxisRight().setEnabled(false);
+        barChartTimeBetweenEvents.animateY(1000);
+        barChartTimeBetweenEvents.invalidate();
+    }
+
+    private String formatDuration(long millis) {
+        long seconds = millis / 1000;
+        if (seconds < 60) return seconds + "s";
+        long minutes = seconds / 60;
+        if (minutes < 60) return minutes + "m";
+        long hours = minutes / 60;
+        if (hours < 24) return hours + "h";
+        long days = hours / 24;
+        return days + "d";
+    }
+
+    
 
     private void showAddLogEntryDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());

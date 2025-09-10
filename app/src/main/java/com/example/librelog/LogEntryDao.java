@@ -49,6 +49,9 @@ public interface LogEntryDao {
     @Query("SELECT strftime('%m', datetime(timestamp/1000, 'unixepoch', 'localtime')) as month, COUNT(*) as count FROM log_entries WHERE event_type_id = :eventTypeId AND datetime(timestamp/1000, 'unixepoch', 'localtime') >= datetime('now', 'start of month', '-11 months', 'localtime') GROUP BY month ORDER BY month ASC")
     List<EventCountByMonth> getEventCountByMonthLast12(long eventTypeId);
 
+    @Query("SELECT timestamp FROM log_entries WHERE event_type_id = :eventTypeId ORDER BY timestamp ASC")
+    List<Long> getTimestampsForEventType(long eventTypeId);
+
     class EventCountByHour {
         public String hour;
         public int count;
