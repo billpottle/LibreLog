@@ -43,7 +43,7 @@ public interface LogEntryDao {
     @Query("SELECT strftime('%H', datetime(timestamp/1000, 'unixepoch', 'localtime')) as hour, COUNT(*) as count FROM log_entries WHERE event_type_id = :eventTypeId GROUP BY hour ORDER BY hour ASC")
     List<EventCountByHour> getEventCountByHour(long eventTypeId);
 
-    @Query("SELECT strftime('%d', datetime(timestamp/1000, 'unixepoch', 'localtime')) as day, COUNT(*) as count FROM log_entries WHERE event_type_id = :eventTypeId GROUP BY day ORDER BY day ASC")
+    @Query("SELECT strftime('%d', datetime(timestamp/1000, 'unixepoch', 'localtime')) as day, COUNT(*) as count FROM log_entries WHERE event_type_id = :eventTypeId AND strftime('%Y-%m', datetime(timestamp/1000, 'unixepoch', 'localtime')) = strftime('%Y-%m', 'now', 'localtime') GROUP BY day ORDER BY day ASC")
     List<EventCountByDay> getEventCountByDay(long eventTypeId);
 
     class EventCountByHour {
